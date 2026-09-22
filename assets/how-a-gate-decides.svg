@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 372" width="1000" height="372" role="img" aria-label="How one gate decides: code builds the state and the questions, Jev returns probabilities, code applies the thresholds and produces four outcomes.">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/>
+    </marker>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="5" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <rect width="1000" height="372" rx="14" fill="#0b1020"/>
+  <g stroke="#1e293b" stroke-width="1">
+    <path d="M0 62 H1000 M0 124 H1000 M0 186 H1000 M0 248 H1000 M0 310 H1000"/>
+    <path d="M125 0 V372 M250 0 V372 M375 0 V372 M500 0 V372 M625 0 V372 M750 0 V372 M875 0 V372"/>
+  </g>
+
+  <text x="34" y="38" fill="#e2e8f0" font-family="ui-sans-serif,-apple-system,'Segoe UI',Roboto,sans-serif" font-size="17" font-weight="700" letter-spacing="1">HOW ONE GATE DECIDES</text>
+  <text x="34" y="56" fill="#64748b" font-family="ui-sans-serif,-apple-system,'Segoe UI',Roboto,sans-serif" font-size="11.5">Everything a program can compute stays in the program. Only the judgment is asked for.</text>
+
+  <!-- pipeline boxes -->
+  <g font-family="ui-sans-serif,-apple-system,'Segoe UI',Roboto,sans-serif">
+    <g>
+      <rect x="34" y="82" width="212" height="86" rx="10" fill="#0e2230" stroke="#22d3ee" stroke-width="1.6"/>
+      <text x="48" y="107" fill="#22d3ee" font-size="13.5" font-weight="700">1 · STATE</text>
+      <text x="48" y="127" fill="#cbd5e1" font-size="11">built by code</text>
+      <text x="48" y="144" fill="#7c8ea3" font-size="10.5">file sizes, exit codes,</text>
+      <text x="48" y="158" fill="#7c8ea3" font-size="10.5">artifact existence</text>
+    </g>
+    <g>
+      <rect x="272" y="82" width="212" height="86" rx="10" fill="#1c1830" stroke="#a78bfa" stroke-width="1.6"/>
+      <text x="286" y="107" fill="#a78bfa" font-size="13.5" font-weight="700">2 · QUESTIONS</text>
+      <text x="286" y="127" fill="#cbd5e1" font-size="11">typed, one axis each</text>
+      <text x="286" y="144" fill="#7c8ea3" font-size="10.5">criteria are situations,</text>
+      <text x="286" y="158" fill="#7c8ea3" font-size="10.5">not degrees</text>
+    </g>
+    <g>
+      <rect x="510" y="82" width="212" height="86" rx="10" fill="#2a2110" stroke="#fbbf24" stroke-width="1.6"/>
+      <text x="524" y="107" fill="#fbbf24" font-size="13.5" font-weight="700">3 · JEV</text>
+      <text x="524" y="127" fill="#cbd5e1" font-size="11">judgment, not text</text>
+      <text x="524" y="144" fill="#7c8ea3" font-size="10.5">a probability per</text>
+      <text x="524" y="158" fill="#7c8ea3" font-size="10.5">question</text>
+    </g>
+    <g>
+      <rect x="748" y="82" width="218" height="86" rx="10" fill="#2a1024" stroke="#f472b6" stroke-width="1.6"/>
+      <text x="762" y="107" fill="#f472b6" font-size="13.5" font-weight="700">4 · THRESHOLDS</text>
+      <text x="762" y="127" fill="#cbd5e1" font-size="11">compared in code</text>
+      <text x="762" y="144" fill="#7c8ea3" font-size="10.5">yes &#8805; 0.8 · no &#8804; 0.2</text>
+      <text x="762" y="158" fill="#7c8ea3" font-size="10.5">the middle goes to a human</text>
+    </g>
+  </g>
+
+  <g stroke="#64748b" stroke-width="1.6" marker-end="url(#a)" fill="none">
+    <path d="M246 125 H266"/>
+    <path d="M484 125 H504"/>
+    <path d="M722 125 H742"/>
+  </g>
+
+  <!-- spine -->
+  <path d="M857 168 V206" stroke="#f472b6" stroke-width="1.6" fill="none"/>
+  <path d="M150 206 H857" stroke="#475569" stroke-width="1.6" fill="none"/>
+  <g stroke="#475569" stroke-width="1.6" marker-end="url(#a)" fill="none">
+    <path d="M150 206 V232"/>
+    <path d="M400 206 V232"/>
+    <path d="M650 206 V232"/>
+    <path d="M857 206 V232"/>
+  </g>
+
+  <!-- outcomes -->
+  <g font-family="ui-sans-serif,-apple-system,'Segoe UI',Roboto,sans-serif">
+    <rect x="50" y="240" width="200" height="58" rx="29" fill="#0d2a22" stroke="#34d399" stroke-width="1.6"/>
+    <text x="150" y="264" text-anchor="middle" fill="#34d399" font-size="13" font-weight="700">0 · CONFIRMED</text>
+    <text x="150" y="282" text-anchor="middle" fill="#7c8ea3" font-size="10.5">every question passed</text>
+
+    <rect x="300" y="240" width="200" height="58" rx="29" fill="#2c1214" stroke="#f87171" stroke-width="1.6"/>
+    <text x="400" y="264" text-anchor="middle" fill="#f87171" font-size="13" font-weight="700">1 · NOT DONE</text>
+    <text x="400" y="282" text-anchor="middle" fill="#7c8ea3" font-size="10.5">evidence contradicts</text>
+
+    <rect x="550" y="240" width="200" height="58" rx="29" fill="#2a2110" stroke="#fbbf24" stroke-width="1.6"/>
+    <text x="650" y="264" text-anchor="middle" fill="#fbbf24" font-size="13" font-weight="700">2 · HUMAN</text>
+    <text x="650" y="282" text-anchor="middle" fill="#7c8ea3" font-size="10.5">inside the middle band</text>
+
+    <rect x="757" y="240" width="200" height="58" rx="29" fill="#161c2b" stroke="#94a3b8" stroke-width="1.6" stroke-dasharray="5 4"/>
+    <text x="857" y="264" text-anchor="middle" fill="#cbd5e1" font-size="13" font-weight="700">3 · UNVERIFIED</text>
+    <text x="857" y="282" text-anchor="middle" fill="#7c8ea3" font-size="10.5">judge unreachable &#8212; never a block</text>
+  </g>
+
+  <text x="34" y="334" fill="#64748b" font-family="ui-sans-serif,-apple-system,'Segoe UI',Roboto,sans-serif" font-size="11">The exit code is the verdict. A gate that cannot answer says so: &#8220;no answer&#8221; is not &#8220;forbidden&#8221;.</text>
+  <text x="34" y="354" fill="#475569" font-family="ui-sans-serif,-apple-system,'Segoe UI',Roboto,sans-serif" font-size="10.5">The approval gate is step 4 alone, with no model in the loop: deterministic flags in, exit 0 or 2 out, 0 ms.</text>
+</svg>
