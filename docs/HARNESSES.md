@@ -86,18 +86,35 @@ wins in the order `deny`, `defer`, `ask`, `allow`.
 
 > [!CAUTION]
 > **A hook that cannot launch looks exactly like a gate that chose to stay silent.**
-> On DeepSeek Harness the bridge injects `shell` and calls `shell.resolve()` for every
-> hook. The shipped sandboxed executors (`dsh-pwsh-sandbox` on Windows, `dsh-bash-sandbox`
-> elsewhere) need `sandboxPolicy`, which the bridge does not inject, so `resolve()` throws
-> `cannot get property "sandboxPolicy" without inject`. `runHook` catches that and returns
-> an outcome with **no decision**, the merge yields `allow`, and the tool runs.
+> On DeepSeek Harness the bridge injects `shell` and calls `shell.resolve()` for every hook.
+> On the composed profiles the mounted executor (`dsh-pwsh-sandbox` on Windows,
+> `dsh-bash-sandbox` elsewhere) reads `this.ctx.sandboxPolicy` in `resolve()`, and `this.ctx`
+> resolves to the **calling** context — so a caller that does not inject `sandboxPolicy` cannot
+> drive it at all. The shipped bridge injects only `["shell","sessionProjections"]`
+> (`dsh-hooks-claude-code/lib/index.js:114`), so `resolve()` fails, `runHook` turns that into an
+> outcome with **no decision**, the merge yields `allow`, and the tool runs.
 >
-> Measured, not inferred: `node scripts/jev-dsh-acceptance.mjs` drives the real harness in
-> a throwaway `DSH_HOME` with no model and reports whether a denied command actually stayed
-> unrun. On the shipped profiles it does **not** — the forbidden command executes. Treat
-> PreToolUse enforcement on this harness as **conditional on a `shell` service the bridge
-> can drive**, and never as a control you have verified because the hook is registered.
-> The adapter's `doctor` reports exactly this instead of claiming the capability.
+> Measured, not inferred: `node scripts/jev-dsh-acceptance.mjs` drives the real harness in a
+> throwaway `DSH_HOME` with no model. Clean measurements, with no proxy in the way:
+> `shell.run(shell.resolve('node --version'))` returns `{exitCode: 1, stdout: "", stderr: ""}`
+> without throwing; writing a file through it throws `cannot get required service
+> "sandboxPolicy" in inactive context`; and `runHook(ctx.shell, {command})` puts that text on
+> stderr and **spawns no hook process at all**. Treat `PreToolUse` enforcement through this
+> **shipped bridge** as unverified and unusable on this build, and never as a control you have
+> verified because the hook is registered. The adapter's `doctor` reports exactly this instead
+> of claiming the capability.
+>
+> **The supported path is the native adapter.** `adapters/dsh/plugin.mjs` is a plain Cordis
+> plugin that needs no `shell` service, so the broken executor cannot affect it; it registers
+> `ctx.tools.guard`, `tools/pre-execute`, `tools/post-execute` and `agent/turn-stopping`.
+> `node scripts/jev-dsh-acceptance.mjs` reports **verdict HELD, exit 0, 5 scenario sets, 24
+> checks, 0 failures** on harness `0.1.5-rc.2` / Node `v24.14.0`. Four limits travel with that
+> result: no model is involved (the calls come from the scenario plugin, not an assistant turn);
+> the Stop checks use a stub agent, so the real loop's acceptance of the steering message shape
+> is unverified; the calls are agent-less, so `ask` is exercised only in its "cannot be routed"
+> form, which becomes `authorization_unavailable` rather than a routed question; and the active
+> profile and the global `node_modules` were never touched — this is a replacement, not a repair.
+> Details and citations: [`DSH.md`](DSH.md).
 
 
 Both hooks in `.claude/settings.json`. `Stop` has no matcher support and fires every turn.
@@ -221,7 +238,9 @@ Put it in the skill as well as the rule file, so it is in context when the work 
 rather than in a file that may not be read. An instruction is not enforcement: it holds near
 the top of the context and weakens over a long session. DSH exposes plugin events, but
 whether they can block a turn the way a `Stop` hook does is a property of the harness, not
-of the gate — check the hook API before relying on enforcement.
+of the gate — check the hook API before relying on enforcement. On DSH that check has now been
+made: `agent/turn-stopping` **cannot veto** a turn, and the shipped hook bridge cannot launch a
+hook on this build at all (see [`DSH.md`](DSH.md)).
 
 ### Plain shell and git hooks — contract only — verify your harness's hook API
 
@@ -276,7 +295,7 @@ not forbidden" — report it and continue.
 | --- | --- | --- |
 | Claude Code | verified — [hooks reference](https://code.claude.com/docs/en/hooks), [hooks guide](https://code.claude.com/docs/en/hooks-guide) | `PreToolUse` for approval (scoped to `Bash(git push *)`), `Stop` for completion; configured in `.claude/settings.json` |
 | GitHub Actions | verified — [contexts reference](https://docs.github.com/en/actions/reference/workflows-and-actions/contexts), [job conditions](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-jobs-with-conditions) | Ordinary workflow steps; no approval gate in CI; secret carried through job-level `env`, tested with `env.*` in the step condition |
-| DeepSeek Harness (DSH) | protocol-tested, runtime-unverified as an enforcement point — see the caution above and `scripts/jev-dsh-acceptance.mjs` | `PreToolUse` via the harness's Claude Code bridge, `Stop` for completion; on the shipped profiles the bridge cannot launch a hook at all, so treat the gate as advisory until the acceptance script says otherwise |
+| DeepSeek Harness (DSH) | shipped bridge: **unverified and unusable on this build**; native adapter (`adapters/dsh/plugin.mjs`): **runtime-verified for the tool pipeline, the guard surface and the Stop handler**, with the model and `ask`-routing limits stated in the caution above — see `scripts/jev-dsh-acceptance.mjs` | `tools/pre-execute` + `ctx.tools.guard` + `tools/post-execute` + `agent/turn-stopping`, via the native Cordis adapter; the harness's Claude Code bridge cannot launch a hook on the shipped profiles, so it enforces nothing |
 | OpenAI Codex / AGENTS.md-compatible | contract only — verify your harness's hook API | Instruction file; gate as a mandatory step before the agent declares the task done |
 | Plain shell / git hooks | contract only — verify your harness's hook API | `.git/hooks/pre-push`; non-zero exit aborts the push |
 | Cursor, opencode, Hermes, Aider, others | contract only — verify your harness's hook API | Wherever the harness can run a command; call `scripts/jev-any-harness.sh` and map the four codes |

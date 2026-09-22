@@ -6,11 +6,13 @@
  * installation? It reads, it does not write, and it never starts a harness.
  *
  * Why a doctor exists at all: the honest answer differs per build. On
- * 0.1.5-rc.2 the hook bridge can deny and can ask, cannot see a structured exit
- * code, and cannot veto a turn. A README that promises otherwise is a README
- * that teaches people to trust a gate that is not there. So the diagnosis is
- * produced from the installed files and reported with the citation, and every
- * capability is labelled `verified` or `unverified`.
+ * 0.1.5-rc.2 the shipped hook bridge cannot launch a hook at all under the
+ * sandboxed executors, cannot see a structured exit code, and cannot veto a
+ * turn; the native adapter can deny on the real path. A README that promises
+ * otherwise is a README that teaches people to trust a gate that is not there.
+ * So the diagnosis is produced from the installed files and reported with the
+ * citation, and every capability is labelled with what was actually measured —
+ * `verified`, `conditional`, `unavailable` or `not_mounted` — and how.
  *
  * Exit codes: 0 healthy, 1 degraded (the adapter works but with reduced effect),
  * 2 misconfigured (the adapter cannot run at all).
@@ -117,26 +119,44 @@ export function approvalPolicy({ env = process.env, home = homedir() } = {}) {
 export function capabilities({ install, bridgeMounted, policy }) {
   return [
     {
-      capability: 'PreToolUse deny',
-      // Not `verified`. The protocol supports it, but the bridge cannot reach the
-      // protocol unless the `shell` service it injects can resolve a command. The
-      // shipped sandboxed executors cannot, and the failure is silent — so the
-      // capability is conditional on a shell the bridge can actually drive.
-      // See docs/HARNESSES.md, "The shell the bridge cannot drive".
+      capability: 'PreToolUse deny via the shipped hook bridge',
+      // Not `verified`. The protocol supports it, but the bridge reaches the
+      // protocol only through the `shell` service it injects, and on the composed
+      // profiles the mounted sandboxed executor cannot be driven by a caller that
+      // does not inject `sandboxPolicy`. The failure is silent, so the capability
+      // is conditional on an executor the bridge can actually use.
+      // See docs/HARNESSES.md and docs/_dsh-runtime-findings.md §13.
       verdict: 'conditional',
       evidence:
         'dsh-hook-protocol/lib/index.js:110-113 (exit 2), :150-151 (permissionDecision); ' +
-        'dsh-hooks-claude-code/lib/index.js:119 (inject ["shell","sessionProjections"]), :148 (shell.resolve); ' +
-        'measured: scripts/jev-dsh-acceptance.mjs — shell.resolve throws "cannot get property \'sandboxPolicy\' without inject", ' +
-        'runHook turns it into an outcome with no decision, and the tool runs',
+        'dsh-hooks-claude-code/lib/index.js:114 (inject ["shell","sessionProjections"]), :148 (shell.resolve); ' +
+        'dsh-pwsh-sandbox/lib/index.js:148 and dsh-bash-sandbox/lib/index.js:141 (resolve reads this.ctx.sandboxPolicy); ' +
+        'measured: ctx.get("shell").ctx.fiber is the CALLER\'s fiber, so a caller that does not inject sandboxPolicy ' +
+        'makes resolve() throw "cannot get required service \\"sandboxPolicy\\" in inactive context"; runHook turns that ' +
+        'into an outcome with no decision and no spawned process',
       consequence:
-        'the adapter can stop a tool call only where the mounted `shell` service resolves without `sandboxPolicy`; ' +
-        'with the shipped sandboxed executors it cannot, and nothing reports that',
+        'with the shipped sandboxed executors the bridge cannot launch a single hook and nothing reports that; ' +
+        'use the native adapter, which needs no `shell` service',
+    },
+    {
+      capability: 'PreToolUse deny via the native adapter',
+      // Runtime-verified, not merely protocol-tested: an isolated harness boot
+      // drove the real tool pipeline and the guard surface.
+      verdict: 'verified',
+      evidence:
+        'adapters/dsh/plugin.mjs (ctx.tools.guard + tools/pre-execute); ' +
+        'dsh-tools/lib/index.js:2816 (guard), :3116-3148 (waterfall and guardReason), ' +
+        'lib/types/index.d.ts:419-427 (PreToolDecision), :610-620 (guard cannot be force-allowed); ' +
+        'measured: node scripts/jev-dsh-acceptance.mjs — verdict HELD, enforce set: the marker tool did not run, ' +
+        'no marker file was written, and the reason named jev-gates',
+      consequence:
+        'a call that requires authorisation is denied on the real path; the guard is monotonic, so no later listener ' +
+        'can force-allow it',
     },
     {
       capability: 'PreToolUse ask',
       verdict: policy.policy === 'never' ? 'unavailable' : policy.policy === 'unknown' ? 'conditional' : 'verified',
-      evidence: 'dsh-hooks-claude-code/lib/index.js:248-264 + dsh-user-approval/lib/index.js:178',
+      evidence: 'adapters/dsh/plugin.mjs (the native adapter raises `ask` on the tools/pre-execute waterfall) + dsh-user-approval/lib/index.js:178; the shipped bridge cannot reach this point at all',
       consequence:
         policy.policy === 'never'
           ? 'policy is "never": an ask becomes an automatic deny, so enforce mode denies explicitly instead and says why'

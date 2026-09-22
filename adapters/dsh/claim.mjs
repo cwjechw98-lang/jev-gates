@@ -31,10 +31,14 @@ export function claimPath(sessionId, env = process.env) {
   return join(stateDir(env), `${safe}.pending-claim`);
 }
 
-export function writeClaim({ sessionId, claim, request = null, at = new Date().toISOString(), env = process.env }) {
+export function writeClaim({ sessionId, claim, request = null, at = new Date().toISOString(), env = process.env, taskId = null, promptId = null, snapshotDigest = null, collect = null }) {
   const path = claimPath(sessionId, env);
   mkdirSync(stateDir(env), { recursive: true });
-  const record = { claimVersion: CLAIM_VERSION, sessionId, claim, request, at };
+  // `taskId`, `promptId` and `snapshotDigest` are what the Stop handler's
+  // anti-loop key is built from. Without them the key could only be a turn
+  // number, and a repeat of the same unresolved condition in a later turn would
+  // look like new information.
+  const record = { claimVersion: CLAIM_VERSION, sessionId, claim, request, at, taskId, promptId, snapshotDigest, collect };
   writeFileSync(path, JSON.stringify(record, null, 2), 'utf8');
   return { path, record };
 }

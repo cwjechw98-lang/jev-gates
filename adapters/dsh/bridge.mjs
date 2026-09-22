@@ -141,7 +141,7 @@ export function decidePreTool({ toolName, toolInput, mode = 'shadow', policy = '
     return {
       decision: 'deny',
       reason:
-        `jev-gates: "${classification.action}" looks irreversible (${classification.flags.join(', ')}) and the approval ` +
+        `jev-gates: authorization_unavailable — "${classification.action}" looks irreversible (${classification.flags.join(', ')}) and the approval ` +
         'policy is "never", so no human can authorise it in this session. This gate cannot obtain authorisation and ' +
         'will not let the action through unauthorised. Re-run with a policy that permits approval, or perform the ' +
         'action outside the session.',
@@ -194,7 +194,7 @@ export function preToolOutput(outcome) {
  * gate cannot veto, and pretending otherwise would be the exact false confidence
  * this project exists to remove.
  */
-export function decideStop({ sessionId, state, maxSteers = DEFAULT_MAX_STEERS, pendingClaim = null, gateResult = null }) {
+export function decideStop({ sessionId, state, maxSteers = DEFAULT_MAX_STEERS, pendingClaim = null, gateResult = null, key = null }) {
   if (!pendingClaim) {
     return { output: {}, steer: false, reason: 'no unfinished claim was recorded for this session', steers: state.steers ?? 0 };
   }
@@ -225,6 +225,22 @@ export function decideStop({ sessionId, state, maxSteers = DEFAULT_MAX_STEERS, p
       gate: gateResult,
     };
   }
+  // Anti-loop. A repeat of the SAME unresolved condition — same task, same prompt,
+  // same snapshot, same reason codes — is not new information, so steering again
+  // would only spend a turn to arrive back here. The spec asks for exactly this
+  // key, and the reason it matters is that a bare counter still allows
+  // `maxSteers` identical turns, which is grinding with a budget attached.
+  if (key !== null && state.lastKey === key) {
+    return {
+      output: {},
+      steer: false,
+      repeated: true,
+      reason: 'the same unresolved condition was already reported and no new evidence has arrived; not steering again',
+      steers,
+      gate: gateResult,
+      key,
+    };
+  }
   const why = gateResult
     ? `the gate returned exit ${gateResult.exitCode} (${gateResult.status ?? 'unknown'})`
     : 'the gate was not run for this claim';
@@ -235,6 +251,7 @@ export function decideStop({ sessionId, state, maxSteers = DEFAULT_MAX_STEERS, p
     },
     steer: true,
     steers: steers + 1,
+    key,
     reason: gateResult ? `one more step was requested: ${why}` : 'one more step was requested',
     gate: gateResult,
   };
@@ -247,14 +264,18 @@ export function decideStop({ sessionId, state, maxSteers = DEFAULT_MAX_STEERS, p
  * timeout and every failure becomes a status rather than an exception. A gate
  * that cannot answer yields exit 3, and the caller steers — never a silent pass.
  */
-export function runGateForClaim({ request, env = process.env, timeoutMs = 20_000, gateScript = null } = {}) {
+export function runGateForClaim({ request, env = process.env, timeoutMs = 20_000, gateScript = null, collect = [] } = {}) {
   if (!request) return null;
   const script = gateScript ?? join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'scripts', 'jev-gate.mjs');
   if (!existsSync(script)) return { exitCode: 3, status: 'unverified', reason: 'the gate script was not found' };
   if (!existsSync(request)) return { exitCode: 3, status: 'unverified', reason: `the request file does not exist: ${request}` };
   const extra = (env.JEV_DSH_GATE_ARGS ?? '--offline --no-journal').split(/\s+/).filter(Boolean);
+  // A claim about an artifact has to be able to say WHICH artifact to read. The
+  // gate will not guess, and without this every artifact criterion came back
+  // `no_observation` — unverified, which steers forever without ever confirming.
+  const collected = (Array.isArray(collect) ? collect : []).filter((p) => typeof p === 'string' && p.length > 0).flatMap((p) => ['--collect', p]);
   try {
-    execFileSync(process.execPath, [script, '--request', request, ...extra], {
+    execFileSync(process.execPath, [script, '--request', request, ...collected, ...extra], {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
       timeout: timeoutMs,

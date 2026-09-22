@@ -63,6 +63,14 @@ const TOOL_RULES = [
 /**
  * Classify a command.
  *
+ * Two kinds of rule are accepted in `rules`, and both are needed:
+ *
+ * - `{name, test, flags}` matches the command TEXT, for shell-shaped calls;
+ * - `{name, tool, flags}` matches the TOOL NAME, for a tool whose arguments carry
+ *   no command to read. Without the second kind a session could not state "this
+ *   particular tool always needs authorisation", which is exactly the rule an
+ *   acceptance test needs and exactly what `TOOL_RULES` above was written for.
+ *
  * @returns {{action, flags, irreversible, rule}}
  */
 export function classifyCommand(command, { toolName = null, rules = null } = {}) {
@@ -72,7 +80,9 @@ export function classifyCommand(command, { toolName = null, rules = null } = {})
   const matchedRules = [];
 
   for (const rule of activeRules) {
-    if (rule.test.test(text)) {
+    const textHit = rule.test instanceof RegExp && rule.test.test(text);
+    const toolHit = rule.tool instanceof RegExp && typeof toolName === 'string' && rule.tool.test(toolName);
+    if (textHit || toolHit) {
       matchedRules.push(rule.name);
       for (const flag of rule.flags) matchedFlags.add(flag);
     }

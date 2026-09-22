@@ -326,10 +326,19 @@ pass JSON on stdin.** That is all.
 | Harness | Status | Where the gate runs |
 |---|---|---|
 | **Claude Code** | ✅ verified against the [hooks reference](https://code.claude.com/docs/en/hooks) | `PreToolUse` for approval, `Stop` for completion, in `.claude/settings.json` |
+| **DeepSeek Harness** | ⚠️ native adapter: runtime-verified for the tool pipeline, the guard surface and `Stop`. The shipped hook bridge is measured as **unusable** on `0.1.5-rc.2` | a Cordis plugin (`adapters/dsh/plugin.mjs`) on `ctx.tools.guard` + `tools/pre-execute`; see [`docs/DSH.md`](docs/DSH.md) |
 | **GitHub Actions** | ✅ verified against the [contexts reference](https://docs.github.com/en/actions/reference/workflows-and-actions/contexts) | ordinary workflow steps; no approval gate in CI |
-| **DeepSeek Harness, Codex, AGENTS.md agents** | 📄 contract only | a rule the agent must follow before declaring the task done |
+| **Codex, AGENTS.md agents** | 📄 contract only | a rule the agent must follow before declaring the task done |
 | **git hooks, plain shell** | 📄 contract only | `.git/hooks/pre-push`; non-zero exit aborts the push |
 | **Cursor, opencode, Hermes, Aider** | 📄 contract only | wherever the harness can run a command |
+
+The DeepSeek Harness row is the one that changed most recently, and it changed in an
+uncomfortable direction before it changed in a good one. The shipped Claude Code hook bridge
+registers, fires, and then cannot launch a single hook: the sandboxed executor it drives reads
+`this.ctx.sandboxPolicy`, `this.ctx` resolves to the **calling** context, and the bridge does not
+inject it — so every hook returns no decision and the tool runs. A hook that cannot launch looks
+exactly like a gate that chose to stay silent. The native adapter above needs no `shell` service,
+so it is not affected. Run `node scripts/jev-dsh-acceptance.mjs` to reproduce both halves.
 
 **→ [docs/HARNESSES.md](docs/HARNESSES.md)** has the recipes, including the subtlety that
 matters: the approval gate's exit `2` means *ask the human*, while a Claude Code hook's exit `2`

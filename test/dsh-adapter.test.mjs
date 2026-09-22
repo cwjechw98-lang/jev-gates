@@ -350,15 +350,29 @@ test('the doctor never reports a policy it did not read', () => {
   assert.equal(stated.capabilities.find((c) => c.capability === 'PreToolUse ask').verdict, 'unavailable');
 });
 
-test('R7: the doctor does not call PreToolUse deny verified — the injected shell may not be drivable', () => {
-  // Measured in an isolated runtime: with the shipped sandboxed executors the
-  // bridge's `shell.resolve()` throws `cannot get property "sandboxPolicy"
-  // without inject`, `runHook` turns that into an outcome with no decision, and
-  // the tool runs. A capability the harness cannot actually reach is conditional,
-  // however well the protocol supports it on paper.
+test('R7: the doctor separates the unreachable bridge from the working native adapter', () => {
+  // Measured in an isolated runtime, without any instrumentation: the mounted
+  // sandboxed executor's `resolve()` reads `this.ctx.sandboxPolicy`, and
+  // `this.ctx` resolves to the CALLING context, so a caller that does not inject
+  // `sandboxPolicy` — which the shipped bridge does not — cannot use it at all.
+  // `runHook` turns the throw into an outcome with no decision, and no process is
+  // spawned. A capability the harness cannot reach is conditional, however well
+  // the protocol supports it on paper. The native adapter does not use `shell`,
+  // so it is verified instead.
+  //
+  // An earlier revision blamed a missing `sandboxPolicy` in the bridge's own
+  // `inject`. That was an artifact of a diagnostic Proxy around `ctx.shell`: a
+  // Cordis service accessor is context-bound, so re-entering it through a proxy
+  // resolves against the wrong context and throws what the real code never hits.
   const report = diagnose({ env: { DSH_HOME: join(tmpdir(), 'no-such-dsh-home') } });
-  const deny = report.capabilities.find((c) => c.capability === 'PreToolUse deny');
-  assert.equal(deny.verdict, 'conditional', 'protocol support is not reachability');
-  assert.match(deny.consequence, /shell/);
-  assert.match(deny.evidence, /sandboxPolicy/);
+  const bridge = report.capabilities.find((c) => c.capability === 'PreToolUse deny via the shipped hook bridge');
+  assert.equal(bridge.verdict, 'conditional', 'protocol support is not reachability');
+  assert.match(bridge.consequence, /shell/);
+  assert.match(bridge.evidence, /sandboxPolicy/);
+  assert.match(bridge.evidence, /CALLER/);
+
+  const native = report.capabilities.find((c) => c.capability === 'PreToolUse deny via the native adapter');
+  assert.equal(native.verdict, 'verified');
+  assert.match(native.evidence, /jev-dsh-acceptance/);
+  assert.match(native.evidence, /HELD/);
 });

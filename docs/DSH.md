@@ -42,56 +42,109 @@ doctor will not guess it: with no key in `settings.yaml` it reports `unknown` an
 | how it attaches | a composition row + a `hooks.json` | `ctx.on('tools/post-execute', …)` |
 | sees a structured exit code | **no** | **yes** — `result.value.exitCode` |
 | sees the tool call id | yes (`tool_use_id`) | yes (`exec.callId`) |
-| can deny before the call | yes | yes, and more precisely |
+| can deny before the call | yes on paper; **unreachable on this build** | yes, and more precisely |
 | can undo a side effect | no | no |
 | needs host privileges | no | yes |
-| mounted on this machine | **no** | n/a |
+| mounted on this machine | **no** | `adapters/dsh/plugin.mjs` — runtime-verified |
 
 The bridge is installed but **not mounted** on the investigated machine: no `hooks.json`
 exists and no composition row references it. A package being present is not a row being
 composed, and conflating the two is how a "supported" claim gets made about something that
 never runs. That is why the doctor reports `not_mounted` rather than "installed".
 
-For anything that depends on a tool's **exit code**, the programmatic path is the right one.
-The bridge's payload carries the rendered tool response as text only
-(`dsh-hooks-claude-code/lib/index.js:375-383`), while the Cordis event carries the structured
-result (`dsh-tool-pwsh/lib/index.js:157-179`).
+The programmatic path is no longer hypothetical: `adapters/dsh/plugin.mjs` is the native Cordis
+adapter, and it is runtime-verified for the tool pipeline, the guard surface and the Stop
+handler (limits in "The supported path" below). For anything that depends on a tool's **exit
+code**, this is also the only path that works — the bridge's payload carries the rendered tool
+response as text only (`dsh-hooks-claude-code/lib/index.js:375-383`), while the Cordis event
+carries the structured result (`dsh-tool-pwsh/lib/index.js:157-179`).
 
 ---
 
 ## What the bridge can and cannot do
 
-### The protocol can deny — the bridge may not be able to reach it
+### The protocol can deny — the shipped bridge cannot reach it
 
-The protocol supports a denial, and the adapter emits one. Whether the bridge can
-**deliver** it depends on the `shell` service it injects, and on the shipped
-profiles it cannot:
+**Correction: an earlier root cause on this page is retracted.** This page first blamed a
+missing `sandboxPolicy` injection in `@deepseek-ai/dsh-hooks-claude-code`, quoting
+`cannot get property "sandboxPolicy" without inject`. That causal claim is **withdrawn as an
+instrumentation artifact**. The string was produced by a diagnostic wrapper that re-entered
+`ctx.shell` through a JavaScript `Proxy`. A Cordis service accessor is context-bound, so going
+through a proxy makes the service resolve against the wrong context and throw an error the
+uninstrumented code never hits. A probe that touched nothing reproduced the real message:
+`cannot get required service "sandboxPolicy" in inactive context`. The old cause is retracted
+explicitly, because a wrong root cause left standing is worse than no root cause.
 
-```
-shell.resolve THREW: cannot get property "sandboxPolicy" without inject
-```
+**The real, measured cause.** On the composed profiles of this build the mounted `shell` service
+is `SandboxPwshExecutor` (Windows) or `SandboxBashExecutor` (elsewhere). Its `resolve()` reads
+`this.ctx.sandboxPolicy` (`dsh-pwsh-sandbox/lib/index.js:148`,
+`dsh-bash-sandbox/lib/index.js:141`), and `this.ctx` resolves to the **calling** context — the
+caller's `inject` set appears first in the chain. A caller that does not inject `sandboxPolicy`
+therefore cannot use the executor at all. Measured, with no proxy:
 
-`dsh-hooks-claude-code/lib/index.js:119` injects `["shell", "sessionProjections"]`
-and calls `shell.resolve(...)` for every hook. On Windows the profile mounts
-`dsh-pwsh-sandbox` as `shell` (elsewhere `dsh-bash-sandbox`); its `resolve()`
-reads `this.ctx.sandboxPolicy`, which the bridge never injected. `runHook`
-catches the throw and returns an outcome with **no exit code and no decision**
-(`dsh-hook-protocol/lib/index.js`, `runHook`), the merge yields `allow`, and the
-tool runs.
+| probe | result |
+|---|---|
+| `ctx.get('shell').ctx.fiber` | the **caller's** fiber, not the service's own |
+| `shell.run(shell.resolve('node --version'))` | `{exitCode: 1, stdout: "", stderr: ""}` — a silent failure, no exception |
+| `shell.run(shell.resolve(<write a file>))` | throws `cannot get required service "sandboxPolicy" in inactive context` |
+| `runHook(ctx.shell, {command})` | stderr carries that text and **no hook process is ever spawned**; no marker file is written |
 
-Nothing reports this. A hook that cannot launch and a gate that chose to stay
-silent produce byte-identical behaviour.
+The same holds under `DSH_PERMISSION_MODE=workspace-write` and `danger-full-access`. The shipped
+bridge injects only `["shell","sessionProjections"]`
+(`dsh-hooks-claude-code/lib/index.js:114`), so on these profiles it cannot launch a hook — and
+`runHook` turns the failure into an outcome with **no exit code and no decision**, the merge
+yields `allow`, and the tool runs. Nothing reports it: a hook that cannot launch and a gate that
+chose to stay silent produce byte-identical behaviour.
 
-Measured, not inferred — `node scripts/jev-dsh-acceptance.mjs` drives the real
-harness in a throwaway `DSH_HOME` with no model:
+**Consequence.** `PreToolUse` enforcement through the **shipped bridge** is conditional and must
+not be claimed as verified because a hook is registered. The adapter's `doctor` reports it as
+`conditional`, and `docs/HARNESSES.md` carries the same caution. The reason is the unusable
+executor, not a missing injection in the bridge.
 
-| run | forbidden command `git push --force` | marker file |
-|---|---|---|
-| shipped `headless` profile | `{ kind: "allow" }` | **created — the command ran** |
-| the same profile with `shell` swapped for `dsh-pwsh-local` | — | the executor then resolves, which is what isolates the cause |
+### The supported path: the native Cordis adapter
 
-The adapter's `doctor` therefore reports `PreToolUse deny` as **conditional**, not
-verified, and `docs/HARNESSES.md` carries the same caution.
+`adapters/dsh/plugin.mjs` is a native Cordis plugin. It uses only documented harness interfaces
+and needs **no `shell` service**, so the broken executor cannot affect it. It registers four
+points:
+
+- `ctx.tools.guard(fn)` — monotonic denial, cannot be force-allowed downstream
+  (`dsh-tools/lib/index.js:2816`, contract at `lib/types/index.d.ts:610-620`);
+- `tools/pre-execute` — waterfall `(exec, next)`; `next()` is **required** for pass-through, and
+  returning `undefined` without it makes the registry throw rather than silently allow
+  (`dsh-tools/lib/index.js:3116-3148`);
+- `tools/post-execute` — `(exec, result, next)`;
+- `agent/turn-stopping` — **serial, no `next`, and its return value is DISCARDED**: it cannot
+  veto a stop (`dsh-agent-loop/lib/index.js:967`). The only lever is `agent.steer(message)`,
+  which enqueues another step inside the same turn.
+
+**Acceptance:** `node scripts/jev-dsh-acceptance.mjs` boots a throwaway `DSH_HOME` built from
+`--from-default-profile headless` plus a `--patch` overlay, mounts the adapter beside
+`adapters/dsh/scenarios.mjs`, and drives `ctx.tools.execute` — the same entry point the agent
+loop uses — against a safe marker tool that only writes a file. Result: **verdict HELD, exit 0,
+5 scenario sets, 24 checks, 0 failures**, ~2–3 s per set, harness `0.1.5-rc.2` on Node
+`v24.14.0`. In the `enforce` set the marker tool does **not** run, no marker is written, and the
+reason names `jev-gates`; an ordinary tool still runs, and a foreign guard's deny is not
+weakened.
+
+Runner failure classes, none of which is a pass: `boot-timeout`, `harness-not-driven`,
+`listener-not-attached`, `tool-not-invoked`, `assertion-failed`. Exit codes: `0` held, `1`
+not-held, `3` not-driven.
+
+**What the acceptance does not prove** — these four limits travel with the result:
+
+1. **No model is involved.** The tool calls come from the scenario plugin, not from an assistant
+   turn: a model would need a paid API and a credential this work is not authorised to spend.
+   The acceptance is about the tool pipeline, the guard surface and the Stop handler — not about
+   model behaviour.
+2. **The Stop checks drive `agent/turn-stopping` with a stub agent** that records `steer()`
+   calls. That verifies this adapter's handler; it does not verify that the real agent loop
+   accepts the message shape, which needs a live turn.
+3. **The acceptance runs agent-less tool calls.** The `ask` path is therefore exercised only in
+   its "cannot be routed" form, which this adapter turns into `authorization_unavailable`. A real
+   session with an agent would route the question instead.
+4. **The active DSH profile was never read or written, and the global `node_modules` was never
+   edited.** The shipped bridge remains unusable here; this adapter is a replacement, not a
+   repair.
 
 ### It can deny
 
@@ -247,16 +300,24 @@ blocking on a machine where the build supports it:
 5. Only then set `JEV_DSH_MODE=enforce`.
 
 For exit-code-dependent gates, mount a Cordis plugin on `tools/post-execute` instead — see
-`_dsh-runtime-findings.md` §7 for the event contracts.
+`_dsh-runtime-findings.md` §7 for the event contracts. On this build that is not an
+alternative but the only working path: the shipped bridge cannot launch a hook here, so
+`adapters/dsh/plugin.mjs` is the supported adapter, and the installer's bridge block is for
+builds where the mounted executor can be driven.
 
 ---
 
 ## Limits, stated plainly
 
-- **Advisory on this build, as configured.** The bridge is not mounted here, and `Stop` cannot
-  veto. The adapter records and recommends; it does not guarantee anything.
+- **The shipped bridge enforces nothing here.** It is not mounted, and on this build it could
+  not launch a hook even if it were. The **native adapter** is runtime-verified for the tool
+  pipeline, the guard surface and the Stop handler — but only subject to the four limits in
+  "The supported path" above.
+- **`Stop` cannot veto.** `agent/turn-stopping` is serial, takes no `next`, and its return value
+  is discarded (`dsh-agent-loop/lib/index.js:967`); the adapter steers, and the turn closes when
+  the inbox drains.
 - **No undo.** `PostToolUse` runs after the effect.
-- **Textual exit codes.** Partial coverage, never confirming on its own.
+- **Textual exit codes through the bridge.** Partial coverage, never confirming on its own.
 - **Misdeclaration defeats the approval rules.** An action described as safe but destructive
   passes the classifier. Describing the action honestly is part of the work.
 - **Not a security boundary.** The adapter can be unmounted by anyone who can edit the
@@ -266,8 +327,14 @@ For exit-code-dependent gates, mount a Cordis plugin on `tools/post-execute` ins
 
 Recorded rather than papered over:
 
-- No live end-to-end run of the bridge inside a harness session was performed for this
-  repository. The protocol half is verified by driving the harness's own parser
-  (`test/dsh-adapter.test.mjs`); the wiring half is verified by reading the composition.
-- Whether anything bounds repeated `Stop` steering in the build itself was not established.
+- **No live-model acceptance was run.** The isolated acceptance drives the real tool pipeline
+  with no model and no assistant turn, so two things stay unproven: whether the real agent loop
+  accepts the `agent.steer` message shape the Stop handler emits, and whether `ask` routes to a
+  human in a live session. Both need a paid credential this work was not authorised to spend.
+- No live end-to-end run of the **bridge** inside a harness session was performed for this
+  repository, and on this build none is possible: the mounted executor cannot be driven by a
+  caller that does not inject `sandboxPolicy`. The bridge limitation is recorded as an
+  unresolved limitation of the installed build, not of this repository.
+- Whether anything bounds repeated `Stop` steering in the build itself was not established. The
+  adapter supplies its own bound.
 - The session's stored `approval/policy` event was not read — session logs were left untouched.

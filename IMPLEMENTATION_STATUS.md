@@ -9,7 +9,9 @@ Prompt: `IMPLEMENTATION_PROMPT.md`. Corrections: `RESEARCH_REVIEW.md` (overrides
 research documents).
 
 **Verification command for the whole offline suite:** `JEV_GATES_OFFLINE=1 node --test` →
-**163 tests, 163 pass, 0 fail, 0 skipped**, no API key, no network.
+**185 tests, 185 pass, 0 fail, 0 skipped**, no API key, no network.
+(162 was the count before `test/dsh-native-adapter.test.mjs` — the 23 tests that closed R7 —
+existed; the command now runs that file too.)
 
 Not every requirement is closed by a test. Where a claim rests on a runtime run rather than a
 test, the run is named in "External review of v0.2.0" below, together with the limit of the
@@ -118,15 +120,21 @@ blocked pipeline.
 
 ---
 
-## Stage E — DSH adapter ✅ COMPLETE (isolated runtime verification)
+## Stage E — DSH adapter — implemented; runtime-verified for the tool pipeline, the guard surface and the Stop handler
 
-Target met: the adapter is implemented, and the harness half is verified by driving the
-**harness's own protocol parser** rather than by trusting documentation.
+Not "complete". The adapter is implemented, and one half of it is now runtime-verified by an
+isolated acceptance run: the **tool pipeline, the guard surface and the Stop handler**, driven
+through the native Cordis adapter `adapters/dsh/plugin.mjs`. The other half — the shipped
+`@deepseek-ai/dsh-hooks-claude-code` bridge — is **measured as unusable on this build** (R7).
+The bridge's protocol half is verified by driving the **harness's own protocol parser** rather
+than by trusting documentation.
 
 | ID | Requirement | State | Evidence |
 |---|---|---|---|
 | REQ-07 | doctor + capability matrix | ✅ | `adapters/dsh/doctor.mjs` — reads the install, reports `verified`/`unavailable`/`not_mounted`/`conditional` with a file:line citation per row |
-| REQ-07 | hook bridge | ✅ | `adapters/dsh/bridge.mjs` + `adapters/dsh/classify.mjs` |
+| REQ-07 | native Cordis adapter | ✅ | `adapters/dsh/plugin.mjs` — registers `ctx.tools.guard`, `tools/pre-execute`, `tools/post-execute`, `agent/turn-stopping`; needs no `shell` service |
+| REQ-07 | hook bridge | ⛔ unusable on this build | `adapters/dsh/bridge.mjs` + `adapters/dsh/classify.mjs`; the mounted sandboxed executor cannot be driven by a caller that does not inject `sandboxPolicy` — see R7 |
+| — | isolated acceptance: tool pipeline + guard + Stop | ✅ | `node scripts/jev-dsh-acceptance.mjs` → **verdict HELD, exit 0, 5 scenario sets, 24 checks, 0 failures**, ~2–3 s per set, harness `0.1.5-rc.2` on Node `v24.14.0`; scenarios in `adapters/dsh/scenarios.mjs` |
 | REQ-09 | installer, dry-run, rollback | ✅ | `adapters/dsh/install.mjs` |
 | T16 | shadow vs enforce deny | ✅ | `test/dsh-adapter.test.mjs` |
 | T17 | a foreign guard's deny survives our silence | ✅ | merged through the real `mergeHookOutputs` |
@@ -134,6 +142,50 @@ Target met: the adapter is implemented, and the harness half is verified by driv
 | T19 | bounded Stop steering | ✅ | budget exhausted → silence + `incomplete: true` |
 | T20 | concurrent sessions do not mix | ✅ | per-session state files; unsafe ids sanitised |
 | T25 | install / uninstall / reinstall | ✅ | `test/acceptance.test.mjs` — foreign lines preserved, backup never overwritten, a later user edit never discarded |
+
+### The isolated acceptance — what it proves, and what it does not
+
+`node scripts/jev-dsh-acceptance.mjs` boots a throwaway `DSH_HOME` built from
+`--from-default-profile headless` plus a `--patch` overlay, mounts `adapters/dsh/plugin.mjs`
+beside `adapters/dsh/scenarios.mjs`, and drives `ctx.tools.execute` — the same entry point the
+agent loop uses — against a safe marker tool that only writes a file. Result: **verdict HELD,
+exit 0, 5 scenario sets, 24 checks, 0 failures**.
+
+| set | what it establishes |
+|---|---|
+| `shadow` | the marker tool runs, the marker appears, the proposed denial is recorded |
+| `enforce` | the marker tool does **not** run, no marker, the reason names `jev-gates`; an ordinary tool still runs; a foreign guard's deny is not weakened and its marker is not written |
+| `never` | `enforce` + `policy: never` denies with `authorization_unavailable` |
+| `failure` | with the decision step made to fail, a call that requires authorisation is denied with the failure named, while an ordinary tool still runs — no blanket block |
+| `stop` | the pending claim produces exactly one steering message; a repeat with the same anti-loop key does not steer again; a cancelled turn does not steer; new evidence does steer; a second session keeps its own budget; a confirmed claim is cleared without steering; a session with no claim is not steered |
+
+Runner failure classes, kept distinct because **none of them is a pass**: `boot-timeout`,
+`harness-not-driven`, `listener-not-attached`, `tool-not-invoked`, `assertion-failed`.
+Exit codes: `0` held, `1` not-held, `3` not-driven.
+
+Four limits, which must be repeated wherever this result is claimed:
+
+1. **No model is involved.** The tool calls come from the scenario plugin, not from an assistant
+   turn: a model would need a paid API and a credential this work is not authorised to spend.
+   The acceptance is about the tool pipeline, the guard surface and the Stop handler — not about
+   model behaviour.
+2. **The Stop checks drive `agent/turn-stopping` with a stub agent** that records `steer()`
+   calls. That verifies this adapter's handler; it does not verify that the real agent loop
+   accepts the message shape, which needs a live turn.
+3. **The acceptance runs agent-less tool calls.** The `ask` path is therefore exercised only in
+   its "cannot be routed" form, which this adapter turns into `authorization_unavailable`. A real
+   session with an agent would route the question instead.
+4. **The active DSH profile was never read or written, and the global `node_modules` was never
+   edited.** The shipped bridge remains unusable here; this adapter is a replacement, not a
+   repair.
+
+The acceptance also found four real defects in our own code, all fixed — which is the evidence
+that it has teeth: the bridge's `policy: never` reason text did not contain the literal
+`authorization_unavailable` it set as a field; an `ask` with no agent to route it produced the
+harness's own message instead of ours; `writeClaim` could not carry `taskId`/`promptId`/
+`snapshotDigest`, so the anti-loop key could only be a turn number; and the completion gate was
+invoked without `--collect`, so every artifact criterion returned `no_observation` and no claim
+could ever be confirmed.
 
 ### What the runtime investigation established (all cited in `docs/DSH.md`)
 
@@ -160,10 +212,12 @@ Target met: the adapter is implemented, and the harness half is verified by driv
 - **The active DSH profile was not touched.** No composition row was added, no preset edited,
   nothing mounted. The installer is exercised against a synthetic `DSH_HOME` in a temp
   directory, which is a real runtime check of our artifact with zero blast radius.
-- **No live harness session was run.** Driving the real parser turns "the docs say the
-  harness reads this field" into "this build reads this field", but it does not prove the
-  wiring inside a running session. That gap is recorded in `docs/DSH.md` §Unresolved rather
-  than papered over.
+- **No live agent turn was run.** The acceptance boots a throwaway `DSH_HOME` and drives
+  `ctx.tools.execute` — the same entry point the agent loop uses — but with no model and no
+  assistant turn. Driving the real parser turns "the docs say the harness reads this field"
+  into "this build reads this field"; it does not prove the wiring inside a running session.
+  The Stop message shape and the `ask` routing path therefore remain unverified in a live
+  session. That gap is recorded in `docs/DSH.md` §Unresolved rather than papered over.
 
 ---
 
@@ -279,37 +333,88 @@ call at all.
 **Scenario:** a failing command criterion with a stub transport that records calls.
 **Expected:** exit 1, zero transport calls, zero journal records.
 
-### R7 — isolated DSH runtime acceptance: **the gate does not hold, and says nothing**
+### R7 — isolated DSH runtime acceptance: the shipped bridge cannot launch a hook; the native adapter holds
 
-The requested positive acceptance was attempted and produced the opposite result, which is
-the more important finding.
+**Correction — the earlier root cause is retracted.** R7 was first reported as a missing
+`sandboxPolicy` injection in `@deepseek-ai/dsh-hooks-claude-code`, with the evidence string
+`cannot get property "sandboxPolicy" without inject`. **That causal claim is withdrawn as an
+instrumentation artifact.** The string was produced by a diagnostic wrapper that re-entered
+`ctx.shell` through a JavaScript `Proxy`. A Cordis service accessor is context-bound, so going
+through a proxy makes the service resolve against the wrong context and throw an error the
+uninstrumented code never hits. A probe that touched nothing reproduced a different, real
+message: `cannot get required service "sandboxPolicy" in inactive context`. The old cause is
+retracted explicitly because a wrong root cause left standing is worse than no root cause.
 
-An isolated `DSH_HOME` was built with `--from-default-profile headless` plus a `--patch`
-overlay — the active profile was never read or written. The overlay mounted the harness's own
-`@deepseek-ai/dsh-hooks-claude-code` against a `hooks.json` that runs the jev-gates bridge in
-enforce mode, and a probe drove the real `tools/pre-execute` waterfall. No model, no cost.
+**The real, measured cause.** On the composed profiles of DSH `0.1.5-rc.2` the mounted `shell`
+service is `SandboxPwshExecutor` (Windows) or `SandboxBashExecutor` (elsewhere). Its `resolve()`
+reads `this.ctx.sandboxPolicy` (`dsh-pwsh-sandbox/lib/index.js:148`,
+`dsh-bash-sandbox/lib/index.js:141`), and `this.ctx` resolves to the **calling** context. A
+caller that does not inject `sandboxPolicy` therefore cannot use the executor at all. Measured,
+with no proxy:
 
-**Measured:** the bridge mounts, its listener fires, and then
-`shell.resolve THREW: cannot get property "sandboxPolicy" without inject`. `runHook` converts
-that into an outcome with **no decision**, the merge yields `allow`, and the forbidden
-`git push --force` **executes**. A hook that cannot launch is behaviourally identical to a
-gate that chose to stay silent.
+- `ctx.get('shell').ctx.fiber` is the **caller's** fiber, not the service's own (the caller's
+  `inject` set appears first in the chain).
+- `shell.run(shell.resolve('node --version'))` → `{exitCode: 1, stdout: "", stderr: ""}` — a
+  silent failure, no exception.
+- `shell.run(shell.resolve(<write a file>))` → throws `cannot get required service
+  "sandboxPolicy" in inactive context`.
+- `runHook(ctx.shell, {command})` → stderr carries that text and **no hook process is ever
+  spawned**; no marker file is written.
+- Same in `DSH_PERMISSION_MODE=workspace-write` and `danger-full-access`.
+
+The shipped bridge injects only `["shell","sessionProjections"]`
+(`dsh-hooks-claude-code/lib/index.js:114`), so it cannot launch a hook on these profiles. A hook
+that cannot launch is behaviourally identical to a gate that chose to stay silent: same stdout,
+same decision, same outcome. **The consequence stands — `PreToolUse` enforcement through the
+shipped bridge is conditional and must not be claimed as verified because a hook is registered
+— but the reason is the unusable executor, not a missing injection in the bridge.**
+
+**Closed by the native adapter.** `adapters/dsh/plugin.mjs` is a native Cordis plugin that uses
+only documented harness interfaces and needs no `shell` service, so the broken executor cannot
+affect it. It registers:
+
+- `ctx.tools.guard(fn)` — monotonic denial, cannot be force-allowed downstream
+  (`dsh-tools/lib/index.js:2816`, contract at `lib/types/index.d.ts:610-620`);
+- `tools/pre-execute` — waterfall `(exec, next)`; `next()` is **required** for pass-through, and
+  returning `undefined` without it makes the registry throw rather than silently allow
+  (`dsh-tools/lib/index.js:3116-3148`);
+- `tools/post-execute` — `(exec, result, next)`;
+- `agent/turn-stopping` — **serial, no `next`, and its return value is discarded**: it cannot
+  veto a stop (`dsh-agent-loop/lib/index.js:967`). The only lever is `agent.steer(message)`,
+  which enqueues another step inside the same turn.
+
+**Acceptance result (verified).** `node scripts/jev-dsh-acceptance.mjs` boots a throwaway
+`DSH_HOME` built from `--from-default-profile headless` plus a `--patch` overlay, mounts the
+adapter beside `adapters/dsh/scenarios.mjs`, and drives `ctx.tools.execute` — the same entry
+point the agent loop uses — against a safe marker tool that only writes a file. Result:
+**verdict HELD, exit 0, 5 scenario sets, 24 checks, 0 failures**, ~2–3 seconds per set, harness
+`0.1.5-rc.2` on Node `v24.14.0`. The sets are `shadow`, `enforce`, `never`, `failure` and
+`stop`; their contents and the runner's failure classes are listed under Stage E above.
+
+**Limits (they must travel with the result).** No model is involved — the calls come from the
+scenario plugin, not an assistant turn, so the acceptance says nothing about model behaviour.
+The Stop checks use a stub agent recording `steer()` calls, so the real loop's acceptance of the
+message shape is unverified. The calls are agent-less, so `ask` is exercised only in its
+"cannot be routed" form, which becomes `authorization_unavailable`. And the active profile and
+the global `node_modules` were never touched: this adapter is a replacement, not a repair.
 
 **Consequences applied:**
-- `adapters/dsh/doctor.mjs` reports `PreToolUse deny` as **conditional**, with this evidence,
-  instead of `verified`. Pinned by a test.
-- `docs/DSH.md` and `docs/HARNESSES.md` carry the caution; `docs/_dsh-runtime-findings.md`
-  §13 records the chain with file and line references.
-- `scripts/jev-dsh-acceptance.mjs` is the reproducer. **Its own status is
-  `runtime-unverified`**: it currently times out and reports `harness-not-driven` (exit 3),
-  which is not a pass. The finding rests on the manual probe runs.
-- `adapters/dsh/claim.mjs` supplies the missing producer for `<session>.pending-claim`, and
-  the Stop handler now runs the gate for the claim instead of steering merely because a file
-  exists.
+- `adapters/dsh/doctor.mjs` reports `PreToolUse deny via the shipped hook bridge` as
+  **conditional** and `PreToolUse deny via the native adapter` as **verified**, each with its
+  own evidence. Pinned by a test.
+- `docs/DSH.md` and `docs/HARNESSES.md` carry the corrected caution;
+  `docs/_dsh-runtime-findings.md` §13 records the retraction and the clean measurements with
+  file and line references.
+- `scripts/jev-dsh-acceptance.mjs` is the reproducer, and its own status is now the measured
+  **HELD (exit 0)** rather than the earlier `harness-not-driven` (exit 3).
+- `adapters/dsh/claim.mjs` supplies the missing producer for `<session>.pending-claim`, and the
+  Stop handler now runs the gate for the claim instead of steering merely because a file exists.
 
-**Limit:** the acceptance proves the negative on this machine and build. It does not prove
-that a profile with a drivable `shell` would enforce correctly — that positive case was
-attempted (swapping in `dsh-pwsh-local`) and the boot did not complete.
+**Limit on the negative:** the shipped-bridge finding proves the negative on this machine and
+build. It does not prove that a profile with a drivable `shell` would enforce correctly — that
+positive case was attempted (swapping in `dsh-pwsh-local`) and the boot did not complete. The
+bridge limitation therefore stays recorded as an unresolved limitation of the **installed
+build**.
 
 ### Status vocabulary used from here on
 
@@ -317,11 +422,14 @@ attempted (swapping in `dsh-pwsh-local`) and the boot did not complete.
 |---|---|
 | `implemented` | the code exists and the offline suite covers it |
 | `protocol-tested` | the behaviour is verified against the documented API or the installed package's own parser |
+| `runtime-verified` | a real harness run confirmed it — never without the limits that run carries |
 | `runtime-unverified` | a real harness run has not confirmed it, or confirmed the opposite |
 
-Stages A–F are **implemented** and **protocol-tested**. The DSH adapter as an enforcement
-point is **runtime-unverified** in the sense above — a runtime run showed it does not
-enforce. Stage G stays blocked by authorisation; stage H stays deprioritised.
+Stages A–F are **implemented** and **protocol-tested**. The **native** DSH adapter is
+**runtime-verified** for the tool pipeline, the guard surface and the Stop handler, subject to
+the four limits stated under Stage E and in R7. The **shipped hook bridge** is unusable on this
+build and is recorded as an unresolved limitation of the installed build, not as a defect of
+this repository. Stage G stays blocked by authorisation; stage H stays deprioritised.
 
 ---
 
@@ -331,8 +439,10 @@ enforce. Stage G stays blocked by authorisation; stage H stays deprioritised.
    with an injected judge and marked `live-validated: no`.
 2. **`tamperResistance` is `none` for local evidence.** The agent process can write to the
    same storage. No sandbox claim is made anywhere in the code or docs.
-3. **The adapter is advisory on the target build.** It cannot veto a turn, cannot undo a side
-   effect, and cannot see a structured exit code through the hook payload.
+3. **The adapter cannot veto a turn.** `agent/turn-stopping` is serial, has no `next`, and its
+   return value is discarded (`dsh-agent-loop/lib/index.js:967`); the only lever is
+   `agent.steer(message)`, which enqueues one more step inside the same turn. It cannot undo a
+   side effect either, and the shipped hook payload carries no structured exit code.
 4. **The gate checks consistency, not truth.** Coherently invented facts pass. This is why the
    evidence must be collected by code rather than written as prose.
 5. **Not a security boundary.** Stated verbatim in `docs/DESIGN.md` and `docs/DSH.md`.
@@ -344,15 +454,25 @@ enforce. Stage G stays blocked by authorisation; stage H stays deprioritised.
 New: `scripts/jev-replay.mjs`, `scripts/jev-dsh-acceptance.mjs`, `lib/contracts.mjs`, `lib/policy.mjs`, `lib/answers.mjs`, `lib/credentials.mjs`,
 `lib/transport.mjs`, `lib/evidence.mjs`, `lib/collector.mjs`, `lib/judge.mjs`,
 `lib/journal.mjs`, `adapters/dsh/{bridge,classify,doctor,install,claim}.mjs`,
-`adapters/dsh/iso-acceptance.mjs`, `test/{regressions,transport,evidence,dsh-adapter,acceptance,replay,invariants}.test.mjs`, `test/net-guard.mjs`,
+`adapters/dsh/plugin.mjs` (the native Cordis adapter — `ctx.tools.guard`, `tools/pre-execute`,
+`tools/post-execute`, `agent/turn-stopping`; no `shell` service),
+`adapters/dsh/scenarios.mjs` (the five acceptance scenario sets),
+`adapters/dsh/iso-acceptance.mjs`, `test/{regressions,transport,evidence,dsh-adapter,dsh-native-adapter,acceptance,replay,invariants}.test.mjs`, `test/net-guard.mjs`,
 `skills/*` (6), `docs/{DSH,CLI,MIGRATION,EVIDENCE,PRIVACY,RELEASE-NOTES-v2}.md`,
-`docs/_dsh-runtime-findings.md`, `examples/{completion,answers}.example.json`,
+`docs/_dsh-runtime-findings.md`, `docs/_dsh-plugin-interfaces.md`, `examples/{completion,answers}.example.json`,
 `examples/demo-project/reports/test-fix.md`, `IMPLEMENTATION_STATUS.md`.
 
 Changed: `scripts/jev-gate.mjs` (rewritten), `scripts/jev.mjs` (R4 credential path, pinned
 model), `scripts/jev-decisions.mjs`, `test/selftest.mjs` (rewritten), `docs/DESIGN.md`,
 `docs/HARNESSES.md`, `README.md`, `README.ru.md`, `package.json`,
 `.github/workflows/ci.yml`, `.gitignore`.
+
+Changed while closing R7: `adapters/dsh/bridge.mjs` (tool-name rules; the `policy: never`
+reason text now contains the literal `authorization_unavailable` it sets as a field),
+`adapters/dsh/classify.mjs`, `adapters/dsh/claim.mjs` (claim identity fields — `taskId`,
+`promptId`, `snapshotDigest` — so the anti-loop key is no longer only a turn number; `--collect`
+so artifact criteria stop returning `no_observation`), `adapters/dsh/doctor.mjs` (the shipped
+bridge and the native adapter are now separate capability rows).
 
 Untouched by design: `scripts/jev-gateway.mjs`, `scripts/jev-evals.mjs`,
 `fixtures/claim-support.json`, and everything under `C:\Users\katoc\.dsh`.
@@ -366,3 +486,9 @@ Untouched by design: `scripts/jev-gateway.mjs`, `scripts/jev-evals.mjs`,
 2. Stage G, only with explicit authorisation: one live pilot call, then compare the recorded
    answer against the offline replay for the same request — `jev-replay policy` and
    `jev-replay sweep` are the tools for that comparison, and they cost nothing.
+3. **A live-model acceptance remains unverified** and needs a paid credential this work was not
+   authorised to spend. Two specific gaps: whether the real agent loop accepts the `agent.steer`
+   message shape the Stop handler emits (the acceptance uses a stub agent that records the
+   calls), and whether the `ask` path routes to a human in a real session (the acceptance runs
+   agent-less tool calls, so `ask` is exercised only in its "cannot be routed" form). Neither is
+   proven by the current HELD result, and neither should be claimed on its strength.

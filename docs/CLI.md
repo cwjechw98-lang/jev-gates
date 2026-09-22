@@ -684,6 +684,127 @@ $ '{"hook_event_name":"PreToolUse","session_id":"s1","tool_name":"Bash","tool_in
 
 ---
 
+## `adapters/dsh/plugin.mjs` — the native adapter
+
+The shipped hook bridge cannot launch a hook on this build: the mounted sandboxed
+executor's `resolve()` reads `this.ctx.sandboxPolicy`, `this.ctx` resolves to the **calling**
+context, and the bridge does not inject it — so `runHook` yields an outcome with no decision
+and no process is ever spawned. See `docs/DSH.md` and `docs/_dsh-runtime-findings.md` §13.
+
+This adapter replaces it. It is a plain Cordis plugin and needs no `shell` service at all, so
+the broken executor cannot affect it. It registers on four documented extension points:
+`ctx.tools.guard()` (monotonic — no later listener can force-allow a denial),
+`tools/pre-execute`, `tools/post-execute`, and `agent/turn-stopping`.
+
+### Row configuration
+
+```yaml
+- insert:
+    - id: jev-adapter
+      name: 'file:///…/jev-gates/adapters/dsh/plugin.mjs'
+      config:
+        mode: shadow            # off | shadow | enforce
+        policy: ask             # ask | never | unknown
+        maxSteers: 2
+        gateTimeoutMs: 20000
+        rules:                  # optional; replaces the built-in command rules
+          - name: requires_authorization
+            tool: '^my_dangerous_tool$'
+            flags: ['authorization_required']
+        logPath: /path/to/adapter.log
+```
+
+A rule matches either the command **text** (`test`) or the **tool name** (`tool`). A tool rule
+is what lets a session say "this tool always needs authorisation" when its arguments carry no
+command to read.
+
+### Modes
+
+| Mode | What it does |
+|---|---|
+| `off` | Registers nothing at all. |
+| `shadow` | Computes and records the decision, registers no guard, and never blocks. |
+| `enforce` | Registers the monotonic guard and denies. |
+
+### Failure policy
+
+The classification runs first and is pure. Everything after it can fail, and what happens
+then depends on whether the call needs authorisation:
+
+- **needs authorisation** — the check was mandatory, so a failure **denies**, naming the failure;
+- **ordinary action** — the check had no opinion, so a failure **passes**.
+
+That is fail-closed without being a blanket block, and both directions are tested.
+
+`ask` is only raised when somebody can actually be asked. With `policy: never`, with no
+approval service mounted, or on a call that carries no agent to route the question through,
+the adapter denies with `authorization_unavailable` instead — asking a human who cannot be
+asked is not a decision.
+
+### What it does not do
+
+- It cannot veto a turn. `agent/turn-stopping` is serial, has no `next`, and its return value
+  is discarded; the only lever is `agent.steer()`, which adds one step inside the same turn.
+- It does not undo a side effect.
+- It does not classify arbitrary shell safely. It matches explicit, auditable patterns.
+
+---
+
+## `scripts/jev-dsh-acceptance.mjs` — the runtime acceptance
+
+```bash
+node scripts/jev-dsh-acceptance.mjs [--json] [--set shadow|enforce|never|failure|stop|all]
+                                    [--timeout-ms 120000] [--keep]
+```
+
+Builds a throwaway `DSH_HOME` from `--from-default-profile headless` plus a `--patch`
+overlay, mounts `plugin.mjs` beside `adapters/dsh/scenarios.mjs`, boots the real harness, and
+drives `ctx.tools.execute` — the same entry point the agent loop uses — against a safe marker
+tool that only writes a file. The active profile is never read or written.
+
+Failure classes are kept apart, and **none of them is a pass**:
+
+| Class | Meaning |
+|---|---|
+| `boot-timeout` | the harness did not finish starting |
+| `harness-not-driven` | it started but wrote no result |
+| `listener-not-attached` | the adapter produced no decision record |
+| `tool-not-invoked` | neither the body ran nor a decision was recorded |
+| `assertion-failed` | the observation contradicted the expectation |
+
+Exit codes: 0 every scenario held, 1 a scenario failed, 3 the run was not driven.
+
+### What it does not do
+
+- It uses no model. The tool calls come from the scenario plugin rather than from an assistant
+  turn, so this is evidence about the tool pipeline, the guard surface and the Stop handler —
+  not about model behaviour.
+- The Stop checks drive `agent/turn-stopping` with a stub agent that records `steer()` calls.
+  That verifies this adapter's handler; it does not verify that the real loop accepts the
+  message shape, which needs a live turn.
+- The calls are agent-less, so the `ask` path is exercised only in its "cannot be routed" form.
+
+---
+
+## `adapters/dsh/claim.mjs` — record what the session is claiming
+
+```bash
+node adapters/dsh/claim.mjs set "<what is being claimed>" --session <id> [--request req.json]
+node adapters/dsh/claim.mjs show --session <id>
+node adapters/dsh/claim.mjs clear --session <id>
+```
+
+The Stop handler steers a turn only when a claim is outstanding. This is the producer: without
+it the completion gate is never connected to the end of a turn. Exit codes: 0 written or
+cleared, 3 nothing to show, 2 usage error.
+
+A claim may carry `request` (the gate request to judge), `collect` (artifact paths for the
+gate to read), and `taskId`/`promptId`/`snapshotDigest` — the last three are what the
+anti-loop key is built from, so a repeat of the same unresolved condition is recognised as
+"no new evidence" rather than as a fresh turn.
+
+---
+
 ## Environment variables
 
 | Variable | Read by | Effect |
@@ -691,7 +812,10 @@ $ '{"hook_event_name":"PreToolUse","session_id":"s1","tool_name":"Bash","tool_in
 | `JEV_GATES_OFFLINE` | `jev-gate.mjs` | `1` is the same as `--offline`. |
 | `JEV_GATES_HOME` | `jev-gate.mjs`, `jev-decisions.mjs`, `jev.mjs`, `bridge.mjs`, `install.mjs` | Where journals and adapter state live. Created if absent. |
 | `TYPESAFE_API_KEY` | `lib/credentials.mjs`, `jev.mjs` | The judge key. Never logged. |
-| `JEV_DSH_MODE`, `JEV_DSH_POLICY`, `JEV_DSH_MAX_STEERS`, `JEV_DSH_STATE` | `bridge.mjs` | Adapter configuration; each is overridden by the matching flag. |
+| `JEV_DSH_MODE`, `JEV_DSH_POLICY`, `JEV_DSH_MAX_STEERS`, `JEV_DSH_STATE` | `bridge.mjs`, `plugin.mjs` | Adapter configuration; each is overridden by the matching row `config` key. |
+| `JEV_DSH_GATE_ARGS` | `bridge.mjs` | Extra arguments for the completion gate the Stop handler runs. Default `--offline --no-journal`. |
+| `JEV_DSH_ENTRY` | `jev-dsh-acceptance.mjs` | The harness entry to boot. Found automatically when unset. |
+| `JEV_SCENARIO_SET`, `JEV_SCENARIO_DIR`, `JEV_SCENARIO_OUT` | `scenarios.mjs` | Which acceptance set to run and where to report. Set by the runner; not for hand use. |
 | `DSH_HOME`, `DSH_PROFILE`, `DSH_WEB_URL`, `DSH_TUI`, `DSH_INSTALL` | `adapters/dsh/*` | Locate the harness and its profile. |
 
 See `docs/PRIVACY.md` for what leaves the machine.
