@@ -11,6 +11,20 @@ testing can substitute for.
 Doing them in the other order would waste money measuring the second while the
 first was still unproven.
 
+> **What is already settled.** The mechanism is no longer the open question. The
+> agent set in `scripts/jev-agent-acceptance.mjs` boots a real DSH, runs a real agent
+> and a real turn, calls a real model provider, executes a model-issued tool call,
+> takes an agent-bound `ask` through the real `approval/request` service, and loads a
+> routed skill through the real `ctx.skills`. All six tools are present in a real
+> agent's catalog, and `jev_route_skill` was executed by the real registry. That run
+> found and fixed a defect in the adapter's Stop steer that nothing else could see.
+>
+> It also proves nothing about quality: the provider is a JSON file. So Stage 1 below
+> is now a **confirmation on the real profile** rather than a first look, and its
+> value is that it uses the installed kit, a real model route and the real skill
+> roots — the parts the isolated run substitutes for. Stage 2 is where the only
+> question that still matters gets asked.
+
 ---
 
 ## Stage 1 — isolated activation (free, no credentials, reversible)
