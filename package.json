@@ -1,0 +1,63 @@
+{
+  "name": "jev-gates",
+  "version": "0.1.0",
+  "description": "Three gates for any coding agent: a deterministic approval gate before irreversible actions, a completion gate that demands evidence instead of «done», and a rubric regression gate. Powered by TypeSafe Jev (System One).",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "bin": {
+    "jev": "scripts/jev.mjs",
+    "jev-gateway": "scripts/jev-gateway.mjs",
+    "jev-gate": "scripts/jev-gate.mjs",
+    "jev-evals": "scripts/jev-evals.mjs",
+    "jev-decisions": "scripts/jev-decisions.mjs"
+  },
+  "files": [
+    "scripts",
+    "fixtures",
+    "examples",
+    "docs",
+    "README.md",
+    "README.ru.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node test/selftest.mjs",
+    "gateway": "node scripts/jev-gateway.mjs",
+    "gate": "node scripts/jev-gate.mjs",
+    "evals": "node scripts/jev-evals.mjs",
+    "decisions": "node scripts/jev-decisions.mjs"
+  },
+  "keywords": [
+    "jev",
+    "typesafe",
+    "system-one",
+    "ai-agents",
+    "coding-agents",
+    "agent-harness",
+    "claude-code",
+    "codex",
+    "deepseek-harness",
+    "dsh",
+    "cursor",
+    "opencode",
+    "hermes-agent",
+    "llm-evaluation",
+    "ai-verification",
+    "guardrails",
+    "prompt-injection",
+    "agent-safety",
+    "evals",
+    "developer-tools"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cwjechw98-lang/jev-gates.git"
+  },
+  "bugs": {
+    "url": "https://github.com/cwjechw98-lang/jev-gates/issues"
+  },
+  "homepage": "https://github.com/cwjechw98-lang/jev-gates#readme"
+}

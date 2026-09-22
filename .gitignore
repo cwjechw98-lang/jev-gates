@@ -1,0 +1,14 @@
+node_modules/
+npm-debug.log*
+.env
+.env.*
+key
+*.local.json
+
+# Runtime journals — written next to the scripts unless JEV_GATES_HOME is set.
+*.jsonl
+!examples/*.jsonl
+
+# OS noise
+.DS_Store
+Thumbs.db

@@ -1,0 +1,24 @@
+{
+  "task": "fix the failing test in src/a.ts and prove the other gates still pass",
+  "claimed": "the test is green, the type check and the linter are green too",
+  "criteria": [
+    "the previously failing test passes",
+    "the type check and the linter still pass",
+    "the changed file was read back after writing"
+  ],
+  "evidence": {
+    "writes": [
+      { "path": "src/a.ts", "bytes": 1204, "read_after": true }
+    ],
+    "commands": [
+      { "cmd": "npx vitest run src/a.test.ts", "exit": 0, "expect_exit": 0, "tail": "Tests 3 passed" },
+      { "cmd": "npx tsc --noEmit", "exit": 0, "expect_exit": 0 },
+      { "cmd": "npx eslint src/", "exit": 0, "expect_exit": 0 }
+    ],
+    "artifacts": [
+      { "path": "reports/test-fix.md", "bytes": 812, "exists": true }
+    ],
+    "notes": "Evidence was collected by code: file sizes, exit codes and artifact existence are facts, not recollections. Replace this file with your own."
+  },
+  "evidence_ref": "reports/test-fix.md"
+}

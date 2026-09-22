@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  offline:
+    name: Offline self-test (node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['18', '20', '22']
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Self-test (no API key, no network)
+        run: node --test test/selftest.mjs
+
+  rubric:
+    name: Rubric stand (needs a key)
+    runs-on: ubuntu-latest
+    env:
+      # The secrets context is not available in a step-level `if`; carry it into
+      # env at job level and test env instead.
+      TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '20'
+      - name: Run the fixture
+        if: ${{ env.TYPESAFE_API_KEY != '' }}
+        run: node scripts/jev-evals.mjs run fixtures/claim-support.json
+      - name: No key
+        if: ${{ env.TYPESAFE_API_KEY == '' }}
+        run: |
+          echo "TYPESAFE_API_KEY is not set, so the model-backed stand is skipped."
+          echo "Skipped is not failed: without a key the judge is unreachable, and"
+          echo "an unreachable judge means UNVERIFIED, never a blocked pipeline."

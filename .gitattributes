@@ -1,0 +1,6 @@
+# Normalize line endings: the scripts and hooks are shell-adjacent and are read
+# on Linux, macOS and Windows.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary

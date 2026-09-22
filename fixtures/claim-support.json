@@ -1,0 +1,72 @@
+{
+  "name": "claim-support",
+  "model": "jev-1.13.0",
+  "target_accuracy": 0.9,
+  "notes": "The base rubric behind the completion gate: does the supplied evidence support the claim? Answers are known in advance, so this fixture doubles as a gate for the rubric itself.",
+  "cases": [
+    {
+      "id": "c1-test-passes",
+      "state": "CLAIM: test X passes.\nEVIDENCE: the command `npx vitest run X` was executed - exit code 0; last output lines: Test Files 1 passed, Tests 3 passed.",
+      "questions": {
+        "supported": {
+          "type": "noul",
+          "instructions": "Does the evidence above support the claim?",
+          "criteria": {
+            "true": "the evidence contains a fact (a command with exit code 0 and a successful output) that directly supports the claim",
+            "false": "the evidence contains no fact that supports the claim"
+          }
+        }
+      },
+      "expect": { "supported": { "at_least": 0.8 } }
+    },
+    {
+      "id": "c2-test-fails",
+      "state": "CLAIM: test X passes.\nEVIDENCE: the command `npx vitest run X` was executed - exit code 1; last output lines: Tests 2 failed.",
+      "questions": {
+        "supported": {
+          "type": "noul",
+          "instructions": "Does the evidence above support the claim?",
+          "criteria": {
+            "true": "the evidence contains a fact that directly supports the claim",
+            "false": "the evidence contains a fact that directly contradicts the claim"
+          }
+        }
+      },
+      "expect": { "supported": { "at_most": 0.2 } }
+    },
+    {
+      "id": "c3-file-read-after-write",
+      "state": "CLAIM: the file src/a.ts is saved with the required line.\nEVIDENCE: the file was modified and then READ after the write; size 1200 bytes; the content that was read contains the line `export const A = 1`.",
+      "questions": {
+        "supported": {
+          "type": "noul",
+          "instructions": "Does the evidence above support the claim?",
+          "criteria": {
+            "true": "the evidence contains a fact (reading the target after writing it, and the required line being present) that directly supports the claim",
+            "false": "the evidence contains no fact that supports the claim"
+          }
+        }
+      },
+      "expect": { "supported": { "at_least": 0.8 } },
+      "control": {
+        "state": "CLAIM: the file src/a.ts is saved with the required line.\nEVIDENCE: the file was modified; after the write the file was NOT read; what it currently contains is unknown.",
+        "expect": { "supported": { "at_most": 0.2 } }
+      }
+    },
+    {
+      "id": "c4-part-of-the-gates-never-ran",
+      "state": "CLAIM: all project gates are green.\nEVIDENCE: only the command `npx tsc --noEmit` was executed - exit code 0. The commands eslint, vitest run and build were NOT executed.",
+      "questions": {
+        "supported": {
+          "type": "noul",
+          "instructions": "Does the evidence above support the claim?",
+          "criteria": {
+            "true": "the evidence contains facts for every gate named in the claim, and all of them succeeded",
+            "false": "part of the gates named in the claim has no evidence at all"
+          }
+        }
+      },
+      "expect": { "supported": { "at_most": 0.2 } }
+    }
+  ]
+}
