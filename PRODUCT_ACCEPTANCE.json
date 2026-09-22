@@ -1,0 +1,379 @@
+{
+  "report": "PRODUCT_ACCEPTANCE",
+  "verdict": "held",
+  "exitCode": 0,
+  "generatedAt": "2026-09-22T14:21:24.223Z",
+  "durationMs": 43089,
+  "harness": {
+    "entry": "C:\\Users\\katoc\\AppData\\Roaming\\npm\\node_modules\\@deepseek-ai\\dsh\\lib\\bin.js",
+    "version": "0.1.5-rc.2",
+    "node": "v24.14.0",
+    "platform": "win32"
+  },
+  "authority": {
+    "paidApiCalls": 0,
+    "activeProfileTouched": false,
+    "unpushedCommits": 6,
+    "pushed": false,
+    "note": "the acceptance installs into a throwaway home; activeProfileTouched comes from the install set witness, and pushed from git rev-list"
+  },
+  "sets": [
+    {
+      "set": "offline",
+      "class": "held",
+      "checks": [
+        {
+          "name": "offline:test/capabilities-c1.test.mjs",
+          "ok": true,
+          "detail": "16/16 pass, 0 fail"
+        },
+        {
+          "name": "offline:test/capabilities-c2-c4.test.mjs",
+          "ok": true,
+          "detail": "37/37 pass, 0 fail"
+        },
+        {
+          "name": "offline:test/capabilities-c3-c5.test.mjs",
+          "ok": true,
+          "detail": "51/51 pass, 0 fail"
+        },
+        {
+          "name": "offline:test/dsh-native-adapter.test.mjs",
+          "ok": true,
+          "detail": "23/23 pass, 0 fail"
+        },
+        {
+          "name": "offline:test/acceptance.test.mjs",
+          "ok": true,
+          "detail": "16/16 pass, 0 fail"
+        },
+        {
+          "name": "offline:test/evidence.test.mjs",
+          "ok": true,
+          "detail": "26/26 pass, 0 fail"
+        },
+        {
+          "name": "offline:test/invariants.test.mjs",
+          "ok": true,
+          "detail": "20/20 pass, 0 fail"
+        },
+        {
+          "name": "offline:test/replay.test.mjs",
+          "ok": true,
+          "detail": "12/12 pass, 0 fail"
+        },
+        {
+          "name": "offline:test/transport.test.mjs",
+          "ok": true,
+          "detail": "10/10 pass, 0 fail"
+        },
+        {
+          "name": "offline:test/dsh-adapter.test.mjs",
+          "ok": true,
+          "detail": "26/26 pass, 0 fail"
+        },
+        {
+          "name": "offline:test/dsh-tools.test.mjs",
+          "ok": true,
+          "detail": "12/12 pass, 0 fail"
+        }
+      ]
+    },
+    {
+      "set": "install",
+      "class": "held",
+      "checks": [
+        {
+          "name": "install:refuses-live-home",
+          "ok": true,
+          "detail": "refusing to install into the live DSH home (C:\\Users\\katoc\\AppData\\Local\\Temp\\jev-install-6nMnrR\\fake-live) without --allow-active-home"
+        },
+        {
+          "name": "install:allows-a-dedicated-home",
+          "ok": true,
+          "detail": "C:\\Users\\katoc\\AppData\\Local\\Temp\\jev-install-6nMnrR\\dedicated is the DSH_HOME of this shell; install only if this is the dedicated pilot home"
+        },
+        {
+          "name": "install:writes-skills-and-patch",
+          "ok": true,
+          "detail": "8 skill file(s), patch present"
+        },
+        {
+          "name": "install:patch-appears-in-composition",
+          "ok": true,
+          "detail": "both rows appear in the harness-composed tree"
+        },
+        {
+          "name": "install:uninstall-keeps-edited-files",
+          "ok": true,
+          "detail": "the edited file was kept and reported"
+        },
+        {
+          "name": "install:refuses-uninstall-without-manifest",
+          "ok": true,
+          "detail": "no jev-install-manifest.json in C:\\Users\\katoc\\AppData\\Local\\Temp\\jev-none-2FNOxh; this installer did not install here, so it will not remove anything"
+        },
+        {
+          "name": "install:active-home-untouched",
+          "ok": true,
+          "detail": "the real DSH home (C:\\Users\\katoc\\.dsh) is unchanged"
+        }
+      ]
+    },
+    {
+      "set": "native",
+      "class": "held",
+      "checks": []
+    },
+    {
+      "set": "agent",
+      "class": "held",
+      "checks": [
+        {
+          "name": "agent:s1",
+          "ok": true,
+          "detail": "held"
+        },
+        {
+          "name": "agent:s2",
+          "ok": true,
+          "detail": "held"
+        },
+        {
+          "name": "agent:s3",
+          "ok": true,
+          "detail": "held"
+        },
+        {
+          "name": "agent:s4",
+          "ok": true,
+          "detail": "held"
+        },
+        {
+          "name": "agent:s5",
+          "ok": true,
+          "detail": "held"
+        }
+      ],
+      "mode": "real-agent-loop/scripted-provider"
+    }
+  ],
+  "capabilities": [
+    {
+      "id": "C1",
+      "tool": "jev_verify_completion",
+      "skill": "jev-completion-gate",
+      "spec": "§14 / core — completion decided from evidence",
+      "skillFileExists": true,
+      "testFiles": [
+        "test/capabilities-c1.test.mjs"
+      ],
+      "tests": 16,
+      "pass": 16,
+      "fail": 0,
+      "registeredInHarness": true,
+      "executedInHarness": false,
+      "invokedByModel": false,
+      "status": "offline-tested"
+    },
+    {
+      "id": "C2",
+      "tool": "jev_route_skill",
+      "skill": "jev-skill-route",
+      "spec": "§14.1 — route to an existing skill",
+      "skillFileExists": true,
+      "testFiles": [
+        "test/capabilities-c2-c4.test.mjs"
+      ],
+      "tests": 37,
+      "pass": 37,
+      "fail": 0,
+      "registeredInHarness": true,
+      "executedInHarness": true,
+      "invokedByModel": false,
+      "status": "runtime-tested"
+    },
+    {
+      "id": "C3",
+      "tool": "jev_check_progress",
+      "skill": "jev-progress-review",
+      "spec": "§14.2 — repeated failure without progress",
+      "skillFileExists": true,
+      "testFiles": [
+        "test/capabilities-c3-c5.test.mjs"
+      ],
+      "tests": 51,
+      "pass": 51,
+      "fail": 0,
+      "registeredInHarness": true,
+      "executedInHarness": false,
+      "invokedByModel": false,
+      "status": "offline-tested"
+    },
+    {
+      "id": "C4",
+      "tool": "jev_review_scope",
+      "skill": "jev-review-scope",
+      "spec": "§14.3 — bounded review of pinned material",
+      "skillFileExists": true,
+      "testFiles": [
+        "test/capabilities-c2-c4.test.mjs"
+      ],
+      "tests": 37,
+      "pass": 37,
+      "fail": 0,
+      "registeredInHarness": true,
+      "executedInHarness": false,
+      "invokedByModel": false,
+      "status": "offline-tested"
+    },
+    {
+      "id": "C5",
+      "tool": "jev_context_plan",
+      "skill": "jev-context-plan",
+      "spec": "§14.4 — context reduction as preview",
+      "skillFileExists": true,
+      "testFiles": [
+        "test/capabilities-c3-c5.test.mjs"
+      ],
+      "tests": 51,
+      "pass": 51,
+      "fail": 0,
+      "registeredInHarness": true,
+      "executedInHarness": false,
+      "invokedByModel": false,
+      "status": "offline-tested"
+    },
+    {
+      "id": "DIAG",
+      "tool": "jev_diagnose",
+      "skill": "jev-diagnose",
+      "spec": "support — explain a gate result and name one next experiment",
+      "skillFileExists": true,
+      "testFiles": [
+        "test/dsh-native-adapter.test.mjs"
+      ],
+      "tests": 23,
+      "pass": 23,
+      "fail": 0,
+      "registeredInHarness": true,
+      "executedInHarness": false,
+      "invokedByModel": false,
+      "status": "offline-tested"
+    }
+  ],
+  "offlineTotals": {
+    "tests": 249,
+    "pass": 249,
+    "fail": 0
+  },
+  "catalog": {
+    "present": [
+      "create_goal",
+      "edit",
+      "exit_plan_mode",
+      "get_goal",
+      "glob",
+      "grep",
+      "interrupt_agent",
+      "jev_artifact",
+      "jev_benign",
+      "jev_check_progress",
+      "jev_context_plan",
+      "jev_diagnose",
+      "jev_foreign",
+      "jev_gated_no",
+      "jev_gated_ok",
+      "jev_marker",
+      "jev_review_scope",
+      "jev_route_skill",
+      "jev_verify_completion",
+      "job_kill",
+      "job_list",
+      "job_output",
+      "list_agents",
+      "pwsh",
+      "ralph",
+      "read",
+      "read_image",
+      "send_message",
+      "skill",
+      "subagent",
+      "subagent_fork",
+      "todo_write",
+      "update_goal",
+      "web_fetch",
+      "web_search",
+      "workflow",
+      "write"
+    ],
+    "jevTools": [
+      {
+        "name": "jev_verify_completion",
+        "descriptionLength": 329,
+        "parametersType": "object"
+      },
+      {
+        "name": "jev_route_skill",
+        "descriptionLength": 286,
+        "parametersType": "object"
+      },
+      {
+        "name": "jev_check_progress",
+        "descriptionLength": 279,
+        "parametersType": "object"
+      },
+      {
+        "name": "jev_review_scope",
+        "descriptionLength": 356,
+        "parametersType": "object"
+      },
+      {
+        "name": "jev_context_plan",
+        "descriptionLength": 320,
+        "parametersType": "object"
+      },
+      {
+        "name": "jev_diagnose",
+        "descriptionLength": 199,
+        "parametersType": "object"
+      },
+      {
+        "name": "jev_marker",
+        "descriptionLength": 81,
+        "parametersType": "object"
+      },
+      {
+        "name": "jev_benign",
+        "descriptionLength": 81,
+        "parametersType": "object"
+      },
+      {
+        "name": "jev_foreign",
+        "descriptionLength": 82,
+        "parametersType": "object"
+      },
+      {
+        "name": "jev_artifact",
+        "descriptionLength": 83,
+        "parametersType": "object"
+      },
+      {
+        "name": "jev_gated_ok",
+        "descriptionLength": 83,
+        "parametersType": "object"
+      },
+      {
+        "name": "jev_gated_no",
+        "descriptionLength": 83,
+        "parametersType": "object"
+      }
+    ]
+  },
+  "limits": [
+    "the agent lane uses a scripted model provider: it proves the mechanism, never the quality of a JEV judgement",
+    "no paid JEV/TypeSafe call was made anywhere in this run",
+    "C5 is a preview and a restore map; wiring a candidate into a live request pipeline is not established",
+    "local evidence has tamperResistance \"none\": a process with the same write access can alter it"
+  ]
+}

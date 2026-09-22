@@ -434,7 +434,11 @@ async function setAgent(options, entry) {
     mode: payload.mode ?? 'real-agent-loop/scripted-provider',
     checks,
     verdict: payload.verdict,
+    // `present` is what a real agent's catalog carried; `invoked` is what a real
+    // loop actually dispatched. They are read as separate facts below.
     catalog: payload.catalog ?? null,
+    invoked: Array.isArray(payload.invoked) ? payload.invoked : [],
+    executed: Array.isArray(payload.executed) ? payload.executed : [],
   };
 }
 
@@ -456,6 +460,22 @@ async function setAgent(options, entry) {
  *
  * So `runtime-tested` needs two things at once: the tool was seen in a real
  * harness's catalog, and a real harness actually invoked it.
+ *
+ * Both facts now come from the agent runner as measurements rather than from a
+ * check name:
+ *
+ *   `catalog.present`  the tool was in a real agent's model-facing catalog.
+ *   `executed`         the real registry ran the tool, on either route.
+ *   `invoked`          a real loop dispatched a MODEL-ISSUED call to the tool.
+ *
+ * `runtime-tested` requires the first two. The third is reported separately and is
+ * not required, because `ctx.tools.execute` is the real harness running the real
+ * tool — but it is not the same claim, so it is never folded into the second.
+ *
+ * In this acceptance only `jev_route_skill` is executed; the other five are present
+ * and callable but were never run. They are recorded with `registeredInHarness: true`
+ * and stay `offline-tested`, which is the truth: a catalog proves a tool is
+ * reachable, not that it works.
  */
 function statusFor(capability, { offline, agent }) {
   const files = capability.tests.filter((f) => offline.perFile[f] && !offline.perFile[f].missing);
@@ -463,9 +483,10 @@ function statusFor(capability, { offline, agent }) {
   const covered = counts.length > 0 && counts.every((c) => c.fail === 0 && c.tests > 0);
   if (!covered) return 'implemented';
 
-  const registered = agent?.catalog ? (agent.catalog.present ?? []).includes(capability.tool) : null;
-  const invoked = (agent?.checks ?? []).some((c) => c.ok && typeof c.name === 'string' && c.name.includes(capability.tool));
-  if (registered === true && invoked) return 'runtime-tested';
+  const present = Array.isArray(agent?.catalog?.present) ? agent.catalog.present : null;
+  const registered = present === null ? null : present.includes(capability.tool);
+  const executed = Array.isArray(agent?.executed) ? agent.executed.includes(capability.tool) : false;
+  if (registered === true && executed) return 'runtime-tested';
 
   // The agent lane is scripted, so even a full pass proves the mechanism and never
   // the judgement. `live-validated` is not reachable from this report at all.
@@ -500,7 +521,10 @@ async function main() {
   const capabilities = CAPABILITIES.map((capability) => {
     const files = capability.tests.filter((f) => offline.perFile[f] && !offline.perFile[f].missing);
     const counts = files.reduce((acc, f) => ({ tests: acc.tests + offline.perFile[f].tests, pass: acc.pass + offline.perFile[f].pass, fail: acc.fail + offline.perFile[f].fail }), { tests: 0, pass: 0, fail: 0 });
-    const registered = agent?.catalog ? (agent.catalog.present ?? []).includes(capability.tool) : null;
+    const present = Array.isArray(agent?.catalog?.present) ? agent.catalog.present : null;
+    const registered = present === null ? null : present.includes(capability.tool);
+    const executed = Array.isArray(agent?.executed) ? agent.executed.includes(capability.tool) : null;
+    const invoked = Array.isArray(agent?.invoked) ? agent.invoked.includes(capability.tool) : null;
     return {
       id: capability.id,
       tool: capability.tool,
@@ -511,7 +535,13 @@ async function main() {
       tests: counts.tests,
       pass: counts.pass,
       fail: counts.fail,
+      // Three separate facts. A tool can be in a real agent's catalog and still
+      // never have been run; and a real registry can run it without the model
+      // having chosen it. Reporting only the first as "registered" would read as
+      // though the tool had been exercised.
       registeredInHarness: registered,
+      executedInHarness: executed,
+      invokedByModel: invoked,
       status: statusFor(capability, { offline, agent }),
     };
   });
@@ -579,7 +609,7 @@ async function main() {
     for (const s of sets) console.log(`  ${s.set.padEnd(8)} ${s.class}`);
     console.log(`  offline: ${offline.totals?.pass ?? 0}/${offline.totals?.tests ?? 0} pass`);
     console.log('  capabilities:');
-    for (const c of capabilities) console.log(`    ${c.id.padEnd(5)} ${c.tool.padEnd(24)} ${c.status.padEnd(16)} tests ${c.pass}/${c.tests}  registered ${c.registeredInHarness}`);
+    for (const c of capabilities) console.log(`    ${c.id.padEnd(5)} ${c.tool.padEnd(24)} ${c.status.padEnd(16)} tests ${c.pass}/${c.tests}  inCatalog ${c.registeredInHarness}  executed ${c.executedInHarness}  byModel ${c.invokedByModel}`);
     console.log(`  report: ${args.out}`);
   }
   process.exit(exitCode);

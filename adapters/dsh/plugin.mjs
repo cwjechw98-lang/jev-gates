@@ -331,7 +331,45 @@ export function apply(ctx, config = {}) {
       if (!outcome.steer) return;
 
       writeState(sessionId, { ...state, steers: outcome.steers, lastKey: key, lastAt: new Date().toISOString() });
-      agent.steer({ content: [{ type: 'text', text: outcome.output.reason }] });
+
+      // A steer must be a complete `UserMessage`, not just `{ content }`.
+      //
+      // `Agent.steer(message: UserMessage)`, and `UserMessage extends Message`,
+      // whose required fields are `id`, `role`, `content` and `source`. The first
+      // version passed `{ content }` alone, and the loop's runtime-context
+      // projection dereferences `message.source.kind` on every `user/message`
+      // event: the missing `source` threw `Cannot read properties of undefined
+      // (reading 'kind')`, the turn ended as `error`, and the steering message
+      // never became a step. The gate decided correctly and its decision never
+      // reached the model — the worst kind of failure, because every line the
+      // adapter logged was right.
+      //
+      // `role` and `id` matter for a second reason: without them the request
+      // assembler skips the message rather than delivering it, so a steer can be
+      // accepted by the inbox and still never be seen by a model.
+      //
+      // The harness builds these with `createUserMessage` from
+      // `@deepseek-ai/dsh-llm`, which also fills `id` from `randomUUID`. This
+      // adapter is loaded by `file://` from outside the install tree and cannot
+      // resolve `@deepseek-ai/*`, so the message is constructed directly — the
+      // same reason `lib/toolspec.mjs` mirrors `defineTool`.
+      //
+      // `source.kind` is `plugin`, not `user`: the adapter produced this, and
+      // recording that the human did would be a small lie in exactly the kind of
+      // record this product exists to keep straight. `plugin` is a valid
+      // `MessageSource` — the `ContextFormed` union permits an absent `form` — and
+      // the only consumer that claims ownership, `isOwned` in `dsh-system-prompt`,
+      // matches its own package name and so correctly ignores ours.
+      //
+      // The id is derived rather than random so the same steer is the same message
+      // across a replay, and is namespaced by session so two sessions cannot
+      // collide.
+      agent.steer({
+        id: `jev-steer-${sessionId}-${turn}-${outcome.steers}`,
+        role: 'user',
+        content: [{ type: 'text', text: outcome.output.reason }],
+        source: { kind: 'plugin', plugin: 'jev-gates' },
+      });
     } catch (error) {
       // A failure here must not become an endless turn, and it must not be
       // reported as a confirmation either. Stay quiet and record it.
