@@ -240,11 +240,16 @@ could ever be confirmed.
 Not started, by instruction: no paid API call is permitted in this session. Everything that
 would need it is offline-tested against an injected judge and marked `live-validated: no`.
 
-## Stage H — experimental tools ⏳ NOT STARTED
+## Stage H — experimental tools ⏳ SUPERSEDED (see "Product delivery" below)
 
 `jev-progress-review` and `jev-skill-route` exist as **advisory procedure skills only**. No
 runtime implementation, and neither is wired into anything that could act on its own. The
 spec marks this stage experimental; leaving it as procedure text is the honest stopping point.
+
+> **Superseded 2026-09-22.** Stage H is C2–C5, and the product-delivery round implemented all
+> four as real tools with skills. See the *Product delivery* section at the end of this file.
+> The advisory property is preserved: C3 still never kills a process, reverts an edit or
+> switches a model.
 
 ---
 
@@ -492,3 +497,88 @@ Untouched by design: `scripts/jev-gateway.mjs`, `scripts/jev-evals.mjs`,
    calls), and whether the `ask` path routes to a human in a real session (the acceptance runs
    agent-less tool calls, so `ask` is exercised only in its "cannot be routed" form). Neither is
    proven by the current HELD result, and neither should be claimed on its strength.
+
+---
+
+## Product delivery — C1–C5, tools, skills, install, acceptance (2026-09-22)
+
+The finishing round turned the capabilities from modules into a product: real tools in the
+harness's own catalog, a skill per capability, an installer, and one end-to-end acceptance.
+
+### What was added
+
+| file | what it is |
+|---|---|
+| `lib/capability.mjs` | the shared envelope core: statuses, modes, reason codes, budget, snapshot identity |
+| `lib/toolspec.mjs` | a dependency-free mirror of the shipped `defineTool` |
+| `lib/skills.mjs` | catalog reading and deterministic shortlisting |
+| `lib/verify.mjs` | C1 — completion from evidence |
+| `lib/route.mjs` | C2 — route to an existing skill |
+| `lib/progress.mjs` | C3 — repeated failure without progress |
+| `lib/review.mjs` | C4 — bounded review of pinned material |
+| `lib/context-plan.mjs` | C5 — context reduction as a preview |
+| `adapters/dsh/tools.mjs` | registers all six tools on `ctx.tools.register` |
+| `adapters/dsh/catalog-probe.mjs` | reads the tool catalog back out of a booted harness |
+| `scripts/jev-install.mjs` | installs skills + the plugin row into a DSH home, and reverses it |
+| `scripts/jev-product-acceptance.mjs` | the single end-to-end acceptance → `PRODUCT_ACCEPTANCE.json` |
+| `skills/jev-review-scope`, `skills/jev-context-plan` | the two skills that were missing |
+| `test/capabilities-c1.test.mjs`, `-c2-c4`, `-c3-c5` | 101 capability tests |
+
+### Two real defects found and fixed during this round
+
+**The snapshot did not include artifact digests.** `verifyCompletion` built its snapshot from
+criteria, the request, and the *paths* of the artifacts. A file could change under it and the
+snapshot would not move, so a completion verdict could keep describing a version that no longer
+existed — INV-07 was unenforceable. The snapshot is now computed *after* the evidence is read
+and includes each observation's own digest. This also preserves the property the stop rule
+needs: the snapshot moves when the material moves and stays put when only the attempt changed,
+so a retry is not mistaken for new information. Pinned by
+`test/capabilities-c1.test.mjs` → "the snapshot identifies the material, not the attempt".
+
+**`ctx.tools.schemas()` returns an empty catalog at bare-probe time.** Measured, not guessed:
+`schemas()` → `[]`, and `get('pwsh')` → `undefined`. This is not a missing bundle — the profile
+declares `@deepseek-ai/dsh-base` and `@deepseek-ai/dsh-headless`, and `cordis.yml` is an empty
+entry list by design. Tool definitions are visible **per agent scope** (`schemas(scope?)`,
+`get(name, scope?)`), and a bare `probe` boot creates no agent. The consequence is recorded
+because it is exactly the kind of thing that gets mistaken for a product failure: the measuring
+instrument, not the product, was empty.
+
+A second, related finding: a Cordis service accessor is context-bound. Reading `ctx.tools`
+inside a detached promise chain fails with `cannot get required service "tools" in inactive
+context`. The body must run inside `ctx.effect(async () => …)`, which keeps the fiber active
+across awaits. Both findings are recorded in memory and in `docs/SOURCE-TRACEABILITY.md`.
+
+### Incident — the acceptance wrote into the live DSH home
+
+The first version of the install set passed the real `$DSH_HOME` as `--home` while overriding
+`DSH_HOME` in the child environment. The installer compares those two to decide whether it is
+looking at the active home, so the mismatch defeated the guard and the install landed in
+`C:\Users\katoc\.dsh`.
+
+- What it wrote: eight skill files, `profiles/jev-product/cordis.patch.yml`, and
+  `jev-install-manifest.json`.
+- What it overwrote: **nothing.** Every `backup` field in the manifest was `null`, which means
+  no pre-existing file was replaced.
+- What it did not touch: the active `web` profile.
+- Reverted with the installer's own `--uninstall`, which removed exactly the nine files it had
+  written. The skill catalog returned to its prior state and the profile list is unchanged.
+
+The test now fakes **both** paths with a temporary directory, so it cannot name the real home
+even when the guard it is testing is broken, and it carries a read-only witness that fails the
+set if the real home changes at all. This is recorded as a durable lesson: a test must not be
+able to write outside its sandbox.
+
+### Verification in this round
+
+- `node --test` — all green, per-capability attribution in `PRODUCT_ACCEPTANCE.json`.
+- `node scripts/jev-product-acceptance.mjs` — the sets are reported separately, and a set that
+  did not run is `not-driven`, never `held`.
+- The acceptance records `authority: { paidApiCalls: 0, activeProfileTouched: false, pushed: false }`.
+
+### What this round does NOT establish
+
+- A scripted test provider proves the mechanism, never the quality of a JEV judgement.
+- C5 remains a preview plus a restore map; wiring a candidate into a live request pipeline is
+  not established.
+- No paid JEV call was made, so the judge's live `choice` lane remains unconfirmed.
+
