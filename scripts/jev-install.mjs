@@ -88,6 +88,33 @@ function activeHome(env = process.env) {
 }
 
 /**
+ * The home the live profile actually lives in.
+ *
+ * The guard protects this one path, not "whatever `DSH_HOME` happens to be".
+ * The first version refused any target equal to the current `DSH_HOME`, which
+ * also blocked the documented pilot flow — a dedicated, isolated pilot home that
+ * the operator had exported as `DSH_HOME` for the pilot shell. Refusing that is
+ * not caution, it is a rule aimed at the wrong thing: a non-default home is
+ * isolated by the operator's own choice, while `~/.dsh` is where the running
+ * session lives whether or not anyone exported anything.
+ *
+ * `JEV_INSTALL_DEFAULT_HOME` exists so the guard itself can be tested without a
+ * test ever naming the real path. A test that passes `~/.dsh` to prove the guard
+ * works is one broken comparison away from writing there — which is exactly what
+ * happened once already. Pointing this at a temporary directory lets the refusal
+ * be exercised for real, safely. Setting it deliberately to redirect the guard is
+ * possible; that is an operator's explicit act, not an accident.
+ *
+ * @param {object} [env] - environment to read the override from.
+ * @returns {string} the path the guard protects.
+ */
+function defaultHome(env = process.env) {
+  const override = env.JEV_INSTALL_DEFAULT_HOME;
+  if (typeof override === 'string' && override.length > 0) return resolve(override);
+  return resolve(join(homedir(), '.dsh'));
+}
+
+/**
  * Build the patch layer that mounts the kit's rows.
  *
  * `pathToFileURL` is not decoration: the loader imports the row by URL, and a
@@ -129,12 +156,17 @@ function readManifest(home) {
  */
 export function install(options, env = process.env) {
   const home = resolve(options.home ?? activeHome(env));
-  const active = activeHome(env);
-  const report = { action: 'install', home, profile: options.profile, dryRun: options.dryRun, wrote: [], backedUp: [], skipped: [], refused: null };
+  const live = defaultHome(env);
+  const report = { action: 'install', home, profile: options.profile, dryRun: options.dryRun, wrote: [], backedUp: [], skipped: [], warnings: [], refused: null };
 
-  if (home === active && !options.allowActiveHome) {
-    report.refused = `refusing to install into the active DSH home (${home}) without --allow-active-home`;
+  if (home === live && !options.allowActiveHome) {
+    report.refused = `refusing to install into the live DSH home (${live}) without --allow-active-home`;
     return report;
+  }
+  // A dedicated home that happens to be `DSH_HOME` is allowed, but the operator
+  // should know that the shell they are in points at it.
+  if (home === activeHome(env) && home !== live) {
+    report.warnings.push(`${home} is the DSH_HOME of this shell; install only if this is the dedicated pilot home`);
   }
 
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -289,6 +321,7 @@ export function uninstall(options, env = process.env) {
 function render(report) {
   const lines = [`${report.action}${report.dryRun ? ' (dry run)' : ''} -> ${report.home}`];
   if (report.refused) return `${lines[0]}\nREFUSED: ${report.refused}`;
+  for (const warning of report.warnings ?? []) lines.push(`warning: ${warning}`);
   if (report.wrote) lines.push(`wrote ${report.wrote.length} file(s), backed up ${report.backedUp.length}`);
   if (report.removed) lines.push(`removed ${report.removed.length}, restored ${report.restored.length}, kept ${report.kept.length}`);
   for (const entry of report.skipped ?? []) lines.push(`skipped: ${entry.path} — ${entry.reason}`);

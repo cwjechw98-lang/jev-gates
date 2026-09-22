@@ -259,17 +259,20 @@ async function setInstall(options) {
   const before = witness();
 
   try {
-    // The refusal check uses a FAKE active home, never the real one.
+    // The refusal check targets a FAKE live home, never the real one.
     //
     // The first version of this test passed the real `$DSH_HOME` as `--home`
     // while overriding `DSH_HOME` in the child's environment. The installer
-    // compares the two to decide whether it is looking at the active home, so
+    // compares the target against the live home to decide whether to refuse, so
     // the mismatch defeated the guard and the install landed in the live home.
-    // Naming the real path in a test is the bug; a test must not be able to
-    // write outside its sandbox even when the guard it is testing is broken.
-    const fakeActive = join(home, 'fake-active');
-    const refused = await run(process.execPath, [script, '--home', fakeActive, '--json'], {
-      env: { ...process.env, DSH_HOME: fakeActive },
+    // Naming the real path in a test is the bug; a test must not be able to write
+    // outside its sandbox even when the guard it is testing is broken.
+    //
+    // `JEV_INSTALL_DEFAULT_HOME` lets the guard be exercised for real against a
+    // temporary path, so the refusal is proven rather than simulated.
+    const fakeLive = join(home, 'fake-live');
+    const refused = await run(process.execPath, [script, '--home', fakeLive, '--json'], {
+      env: { ...process.env, JEV_INSTALL_DEFAULT_HOME: fakeLive },
     });
     let refusedPayload = null;
     try {
@@ -278,9 +281,28 @@ async function setInstall(options) {
       /* reported as a failure below */
     }
     checks.push({
-      name: 'install:refuses-active-home',
-      ok: Boolean(refusedPayload?.refused) && !existsSync(join(fakeActive, 'jev-install-manifest.json')),
+      name: 'install:refuses-live-home',
+      ok: Boolean(refusedPayload?.refused) && !existsSync(join(fakeLive, 'jev-install-manifest.json')),
       detail: refusedPayload?.refused ?? 'no refusal reported',
+    });
+
+    // A dedicated home exported as DSH_HOME must be allowed, with a warning: the
+    // documented pilot flow does exactly this, and refusing it aimed the guard at
+    // the wrong thing.
+    const dedicated = join(home, 'dedicated');
+    const allowed = await run(process.execPath, [script, '--home', dedicated, '--json'], {
+      env: { ...process.env, DSH_HOME: dedicated },
+    });
+    let allowedPayload = null;
+    try {
+      allowedPayload = JSON.parse(allowed.stdout);
+    } catch {
+      /* reported below */
+    }
+    checks.push({
+      name: 'install:allows-a-dedicated-home',
+      ok: allowed.code === 0 && (allowedPayload?.wrote ?? []).length > 0 && (allowedPayload?.warnings ?? []).length > 0,
+      detail: allowedPayload?.warnings?.[0] ?? `exit ${allowed.code}, ${(allowedPayload?.wrote ?? []).length} file(s)`,
     });
 
     const installed = await run(process.execPath, [script, '--home', home, '--json']);
@@ -296,6 +318,30 @@ async function setInstall(options) {
       ok: installed.code === 0 && wroteSkills.length >= CAPABILITIES.length && existsSync(join(home, 'profiles', 'jev-product', 'cordis.patch.yml')),
       detail: `${wroteSkills.length} skill file(s), patch ${existsSync(join(home, 'profiles', 'jev-product', 'cordis.patch.yml')) ? 'present' : 'MISSING'}`,
     });
+
+    // The decisive check that the kit is actually mounted: ask the harness to
+    // dump its own composed tree and look for the rows there. Reading the patch
+    // file back would only prove we wrote a file; the dump proves the loader
+    // applied it.
+    //
+    // The profile is created BEFORE the install, because `--from-default-profile`
+    // regenerates `cordis.patch.yml` and would overwrite the kit's rows.
+    const entry = findDshEntry();
+    if (!entry) {
+      checks.push({ name: 'install:patch-appears-in-composition', ok: false, detail: 'DSH entry point not found' });
+    } else {
+      const profile = 'jev-patchtest';
+      await run(process.execPath, [entry, '--profile', profile, '--from-default-profile', 'headless', '--dump-config'], { env: { ...process.env, DSH_HOME: home } });
+      const installed = await run(process.execPath, [script, '--home', home, '--profile', profile, '--json'], { env: { ...process.env, DSH_HOME: home } });
+      const dump = await run(process.execPath, [entry, '--profile', profile, '--dump-config'], { env: { ...process.env, DSH_HOME: home } });
+      const composed = `${dump.stdout}\n${dump.stderr}`;
+      const rows = ['jev-tools', 'jev-adapter'].filter((id) => composed.includes(`id: ${id}`));
+      checks.push({
+        name: 'install:patch-appears-in-composition',
+        ok: installed.code === 0 && rows.length === 2,
+        detail: rows.length === 2 ? 'both rows appear in the harness-composed tree' : `rows found: ${rows.join(', ') || 'none'}`,
+      });
+    }
 
     // A user edit must survive an uninstall. This is the difference between an
     // uninstall and data loss.
