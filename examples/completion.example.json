@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 2,
+  "taskId": "fix-failing-test",
+  "runId": "run-2026-09-22-01",
+  "mode": "completion",
+  "criteria": [
+    {
+      "id": "report-written",
+      "text": "the fix report exists and is not empty",
+      "kind": "deterministic",
+      "required": true,
+      "verificationScope": ["examples/demo-project/reports/test-fix.md"],
+      "check": { "type": "artifact_nonempty" }
+    },
+    {
+      "id": "fix-addresses-root-cause",
+      "text": "the report describes a change to the cause rather than to the symptom",
+      "kind": "semantic",
+      "required": true,
+      "verificationScope": ["examples/demo-project/reports/test-fix.md"]
+    }
+  ],
+  "claims": {
+    "task": "fix the failing test in src/a.ts",
+    "claimed": "the failing test is green and the fix report is written"
+  }
+}

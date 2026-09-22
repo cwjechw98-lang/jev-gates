@@ -20,9 +20,11 @@
  *   import { ask, logOutcome } from './jev.mjs';
  */
 import { readFileSync, appendFileSync, existsSync, mkdirSync } from 'node:fs';
-import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import { resolveApiKey } from '../lib/credentials.mjs';
+import { buildRequest, DEFAULT_MODEL } from '../lib/judge.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ENDPOINT = 'https://api.typesafe.ai/v1/systemone';
@@ -39,29 +41,22 @@ export function homeDir() {
 export const journalPath = () => join(homeDir(), 'jev-journal.jsonl');
 
 /**
- * API key, in order: environment, $JEV_GATES_HOME/key, the DeepSeek Harness
- * credential store, the XDG config file. Never logged, never printed.
+ * API key, resolved by the one safe resolver.
+ *
+ * This function used to read the file itself and fall back to `raw` when its
+ * YAML pattern did not match — so a whole credentials file could be returned as
+ * the key. `resolveApiKey` classifies the file first and refuses to guess, which
+ * is the fix; the point of routing every public entry through it is that the fix
+ * only holds if there is no second path around it.
+ *
+ * Order: the environment, then the known credential files. Never logged.
  */
-export function apiKey() {
-  if (process.env.TYPESAFE_API_KEY) return process.env.TYPESAFE_API_KEY.trim();
-
-  const candidates = [
-    join(homeDir(), 'key'),
-    join(homedir(), '.dsh', '.credentials.yaml'),
-    join(homedir(), '.config', 'jev-gates', 'key'),
-  ];
-
-  for (const path of candidates) {
-    if (!existsSync(path)) continue;
-    const raw = readFileSync(path, 'utf8');
-    const yaml = raw.match(/^\s{2}TYPESAFE_API_KEY:\s*(.+)$/m);
-    const value = (yaml ? yaml[1] : raw).trim().replace(/^["']|["']$/g, '');
-    if (value) return value;
+export function apiKey({ homeDir: gatesHome = homeDir(), userHome = undefined } = {}) {
+  const resolved = resolveApiKey({ homeDir: gatesHome, ...(userHome ? { userHome } : {}) });
+  if (!resolved.ok) {
+    throw new Error(`no API key: ${resolved.code}. Set TYPESAFE_API_KEY, or write the key to ${join(gatesHome, 'key')}`);
   }
-
-  throw new Error(
-    'no API key: set TYPESAFE_API_KEY, or write it to ' + join(homeDir(), 'key'),
-  );
+  return resolved.value;
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -71,7 +66,10 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
  * stochastic failure, and a retry is the fix, not grinding.
  */
 export async function ask(state, questions, options = {}) {
-  const { model = 'jev-latest', retries = 3, timeoutMs = 90_000 } = options;
+  const { model = DEFAULT_MODEL, retries = 3, timeoutMs = 90_000 } = options;
+  // The body is validated against the documented contract before it is sent: a
+  // request the endpoint will reject costs a round trip and, on a paid lane, money.
+  const body = buildRequest({ state, model, questions });
   const key = apiKey();
   let lastError;
 
@@ -81,7 +79,7 @@ export async function ask(state, questions, options = {}) {
       const res = await fetch(ENDPOINT, {
         method: 'POST',
         headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ state, model, questions }),
+        body: JSON.stringify(body),
         signal: AbortSignal.timeout(timeoutMs),
       });
       if (res.status === 429 || res.status === 529 || res.status >= 500) {
@@ -151,7 +149,7 @@ if (isMain) {
       const res = await ask(
         'The word "yes" appears in this sentence. The sentence is: yes.',
         { alive: { type: 'noul', instructions: 'Does the state contain the word yes?' } },
-        { model: flag('model') ?? 'jev-1.13.0' },
+        { model: flag('model') ?? DEFAULT_MODEL },
       );
       console.log('route: WORKING');
       console.log(`model: ${res.model}, yes probability: ${res.answers?.alive?.noul}`);
@@ -164,7 +162,7 @@ if (isMain) {
   } else if (cmd === 'ask') {
     const state = rest[0];
     const questions = JSON.parse(rest[1] ?? '{}');
-    const res = await ask(state, questions, { model: flag('model') ?? 'jev-latest' });
+    const res = await ask(state, questions, { model: flag('model') ?? DEFAULT_MODEL });
     console.log(JSON.stringify(res.answers, null, 2));
     console.log(`\nmodel ${res.model}, input ${res.inputTokens} tokens, $${res.costUsd.toFixed(6)}`);
   } else if (cmd === 'note') {

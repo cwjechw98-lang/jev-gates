@@ -24,6 +24,8 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { DEFAULT_THRESHOLDS, decideFromProbability } from '../lib/policy.mjs';
+import { validateAnswers } from '../lib/answers.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -38,14 +40,20 @@ export function homeDir() {
 export const decisionsPath = () => join(homeDir(), 'jev-decisions.jsonl');
 
 /** Default thresholds. Change them deliberately, against the cost of an error. */
-export const THRESHOLDS = { yes: 0.8, no: 0.2 };
+export const THRESHOLDS = { yes: DEFAULT_THRESHOLDS.yes, no: DEFAULT_THRESHOLDS.no, calibrated: false };
 
-/** Decide from a probability. Code applies the threshold; the model only scores. */
+/**
+ * Decide from a probability. Code applies the threshold; the model only scores.
+ *
+ * Delegates to the policy module so that there is exactly one implementation of
+ * this rule in the project. The defect it fixes: `2`, `Infinity` and `NaN` all
+ * used to fall through to a comparison and could read as a confident yes.
+ */
 export function decide(p, thresholds = THRESHOLDS) {
-  if (typeof p !== 'number' || Number.isNaN(p)) return 'unverified';
-  if (p >= thresholds.yes) return 'yes';
-  if (p <= thresholds.no) return 'no';
-  return 'review';
+  return decideFromProbability(p, {
+    no: thresholds?.no ?? THRESHOLDS.no,
+    yes: thresholds?.yes ?? THRESHOLDS.yes,
+  });
 }
 
 /** Short digest of a text: the journal needs a reference, not the whole state. */
@@ -63,30 +71,23 @@ export function logDecision(record) {
   return entry;
 }
 
-/** Flatten a Jev answer into value + distribution + confidence. Invents nothing. */
+/**
+ * Flatten a Jev answer into value + distribution + confidence.
+ *
+ * This used to copy any number it found, which is how an out-of-range value
+ * survived into a verdict. It now runs the same validation as the gate, so an
+ * invalid probability is dropped here as well — dropping means "no answer",
+ * which the policy reads as unverified.
+ */
 export function flattenAnswers(answers = {}) {
-  const out = {};
+  const questions = {};
   for (const [id, a] of Object.entries(answers)) {
     if (!a || typeof a !== 'object') continue;
-    if (typeof a.noul === 'number') {
-      out[id] = { type: 'noul', value: a.noul };
-    } else if (typeof a.choice === 'string') {
-      out[id] = {
-        type: 'choice',
-        value: a.choice,
-        probabilities: a.probabilities ?? null,
-        confidence: a.confidence ?? null,
-      };
-    } else if (typeof a.score === 'number') {
-      out[id] = {
-        type: 'score',
-        value: a.score,
-        probabilities: a.probabilities ?? null,
-        confidence: a.confidence ?? null,
-      };
-    }
+    if (typeof a.noul === 'number') questions[id] = { type: 'noul' };
+    else if (typeof a.choice === 'string') questions[id] = { type: 'choice', options: a.probabilities ? Object.keys(a.probabilities) : undefined };
+    else if (typeof a.score === 'number') questions[id] = { type: 'score' };
   }
-  return out;
+  return validateAnswers(answers, questions).flat;
 }
 
 export function readDecisions() {

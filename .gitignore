@@ -12,3 +12,11 @@ key
 # OS noise
 .DS_Store
 Thumbs.db
+
+# Adapter state, when JEV_GATES_HOME is not set.
+.dsh-state/
+
+# Isolated runtime acceptance scratch (scripts/jev-dsh-acceptance.mjs)
+.acceptance/
+.iso-dsh/
+.iso-project/

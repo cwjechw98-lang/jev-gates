@@ -169,53 +169,84 @@ to reversible, because a gate that blocks routine work gets switched off within 
 The order is fixed: **do the work → read the target → collect evidence → judge.** Judging a
 success message without reading the target adds one more opinion, not proof.
 
-Write down what you claim, and the proof code can verify:
+Write down what you claim, and the proof code can verify. In v2 each criterion declares
+**how it is checked**, and code decides everything it can:
 
 ```json
 {
-  "task": "fix the failing test in src/a.ts",
-  "claimed": "the test is green, the type check and the linter are green too",
-  "criteria": ["the previously failing test passes", "the changed file was read back after writing"],
-  "evidence": {
-    "writes": [{ "path": "src/a.ts", "bytes": 1204, "read_after": true }],
-    "commands": [
-      { "cmd": "npx vitest run src/a.test.ts", "exit": 0, "expect_exit": 0, "tail": "Tests 3 passed" },
-      { "cmd": "npx tsc --noEmit", "exit": 0, "expect_exit": 0 }
-    ],
-    "artifacts": [{ "path": "reports/test-fix.md", "bytes": 812, "exists": true }]
-  }
+  "schemaVersion": 2,
+  "taskId": "fix-failing-test",
+  "runId": "run-1",
+  "projectRoot": ".",
+  "criteria": [
+    { "id": "test-green", "text": "the previously failing test passes", "kind": "deterministic",
+      "required": true, "evidenceRefs": ["cmd-1"],
+      "check": { "type": "command_exit", "ref": "cmd-1", "expectExit": 0 } },
+    { "id": "report-written", "text": "the report was written and read back", "kind": "deterministic",
+      "required": true, "verificationScope": ["reports/test-fix.md"], "evidenceRefs": ["art-1"],
+      "check": { "type": "read_after_write", "ref": "art-1" } },
+    { "id": "fix-addresses-root-cause", "text": "the change addresses the cause, not the symptom",
+      "kind": "semantic", "required": true }
+  ],
+  "observations": [
+    { "observationId": "cmd-1", "kind": "command", "executable": "npx", "argv": ["vitest", "run"],
+      "status": "completed", "exit": 0, "coverage": "full", "sourceTrust": "harness_observed",
+      "capturedAt": "2026-09-22T11:59:00.000Z" },
+    { "observationId": "art-1", "kind": "artifact", "path": "reports/test-fix.md",
+      "existence": true, "bytes": 812, "coverage": "full", "sourceTrust": "collector_observed",
+      "capturedAt": "2026-09-22T11:59:30.000Z" }
+  ]
 }
 ```
 
 ```bash
-node scripts/jev-gate.mjs --claims examples/claims.example.json --dry   # what the model will see
-node scripts/jev-gate.mjs --claims examples/claims.example.json
+node scripts/jev-gate.mjs --request examples/completion.example.json --collect reports/test-fix.md
+node scripts/jev-gate.mjs --request examples/completion.example.json --offline   # never contact the judge
 ```
 
-`--dry` prints the computed state and the questions and calls nothing — the cheapest way to see
-whether your evidence is even worth judging.
+`kind: "deterministic"` means **code decides it and the model is never asked**. `kind:
+"semantic"` is the only kind that becomes a question. `--collect` measures the named artifacts
+and never runs a command: a verifier that executes things is a verifier that causes side effects.
 
-The output separates what **code computed** from what the **model judged**:
+The report separates what **code computed** from what the **model judged**:
 
 ```
 VERDICT: CONFIRMED
-reason: all 6 questions passed
-evidence: {"writes":1,"writesRead":1,"commands":3,"cmdsOk":3,"artifacts":1,"artsOk":1,"criteria":3}
+reason: all 3 required criteria are supported by independent evidence; the thresholds were not calibrated on this task
+reason codes: all_required_criteria_passed, thresholds_uncalibrated
+evidence: {"criteriaTotal":3,"requiredTotal":3,"passed":3,"failed":0,"review":0,"unverified":0,"evidenceBacked":2,"judged":1,"deterministicFailures":[]}
+source trust: collector_observed; calibrated: false; mode: completion
 
-  read_after_write     0.98   yes
-  reproduced           0.96   yes
-  artifacts_present    0.96   yes
-  criterion_1          0.94   yes
-  criterion_2          0.97   yes
-  criterion_3          0.98   yes
+  test-green             pass              -     pass
+  report-written         pass              -     pass
+  fix-addresses-root-cause unknown          0.93   pass
 
-model jev-1.13.0, input 975 tokens, $0.000041
+judge: ok
 limit: this gate checks that the evidence is consistent, not that it is true.
+limit: local evidence has tamperResistance "none" — it can be altered by a process with the same write access.
 ```
 
-Questions that cannot apply are **not asked**. With no files, no commands, no artifacts and no
-criteria there is nothing to judge, and the gate exits `3` with "NOTHING TO CHECK" — that is
-not "done", it is the absence of evidence.
+Questions that cannot apply are **not asked**. With nothing to check the gate exits `3` with
+"NOTHING TO CHECK" — that is not "done", it is the absence of evidence.
+
+### A v1 claims file can no longer say "done"
+
+This is deliberate and it is a breaking change. A v1 claims file is **self-reported by
+definition** — the agent wrote down its own exit codes — and self-report cannot raise the
+evidence level. So a v1 file now exits `3`:
+
+```
+VERDICT: UNVERIFIED
+reason: a v1 claims file carries self-reported evidence only; legacy-1: no usable answer; the thresholds were not calibrated on this task
+reason codes: legacy_untrusted, judge_abstained, thresholds_uncalibrated
+
+a v1 claims file is self-reported evidence: it cannot confirm anything on its own.
+this is NOT "done" and NOT "forbidden": nothing is confirmed, a human decides.
+```
+
+`unverified` is not a block and not a refusal. It is the honest answer, and a human still
+decides. See [`docs/MIGRATION.md`](docs/MIGRATION.md) to convert a v1 file into a v2 request.
+
 
 > [!IMPORTANT]
 > **What it does not do:** it checks that the evidence is *consistent* with the claim, not that

@@ -7,19 +7,25 @@ on:
 
 jobs:
   offline:
-    name: Offline self-test (node ${{ matrix.node }})
+    name: Offline suite (node ${{ matrix.node }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        node: ['18', '20', '22']
+        node: ['18', '20', '22', '24']
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
           node-version: ${{ matrix.node }}
-      - name: Self-test (no API key, no network)
-        run: node --test test/selftest.mjs
+      - name: Full suite (no API key, no network)
+        # Bare `node --test` discovers every file under test/. Naming a single
+        # file here is how a suite silently stops covering the new cases.
+        run: node --test
+      - name: The DSH adapter must not require the harness to be installed
+        run: |
+          node adapters/dsh/doctor.mjs || test $? -eq 1 || test $? -eq 2
+          node adapters/dsh/install.mjs plan
 
   rubric:
     name: Rubric stand (needs a key)

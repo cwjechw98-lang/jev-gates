@@ -163,3 +163,74 @@ Criteria are situations.       Thresholds are code, and they are measured.
 Missing is unverified.         Irrelevant questions are not asked.
 The instrument is a suspect.   The version is pinned.
 ```
+
+---
+
+## Boundaries and failure modes (v2)
+
+The rules above say how a gate should decide. This section says what a gate cannot do, so that
+nobody reads the exit codes as a guarantee they were never meant to carry.
+
+**The gate checks consistency between evidence and a claim, not truth.** It asks whether the
+evidence that code collected supports the claim that was written down. Invent the facts
+coherently and the gate will not catch it. This is why the evidence has to come from a
+collector that measured a file or a harness that reported how a command ended, rather than from
+prose the agent wrote about itself. The structural enforcement is real — a self-report cannot
+confirm anything — but structure is not truth.
+
+**Local evidence has `tamperResistance: "none"`, and a process with write access to the same
+storage can alter it.** A file can change between the moment the collector hashes it and the
+moment the policy reads the fact. An observation file can be edited. Nothing in this repository
+detects that, and the value is printed on every report and every JSON payload rather than
+omitted, because an absent field would read as a property the gate does not have.
+
+**This is not a security boundary and not a privilege boundary.** The gate runs with the same
+privileges as the work it judges. It cannot isolate a process, cannot restrict what an agent may
+write, and cannot prove that an observation was produced honestly. It is a consistency check
+with an audit trail, and calling it a boundary would invite exactly the trust it cannot repay.
+Anything that must be enforced needs a real boundary underneath — a sandbox, a permission
+system, a separate machine.
+
+**Untrusted text is wrapped in `<untrusted:label>` tags as a reduction in surface, not as a
+proof that prompt injection is impossible.** The claim, the task statement, the criterion
+wording, paths, file names and command output all arrive at the judge inside those tags. That
+reduces the chance that a line of untrusted text is read as an instruction. It does not remove
+the risk, and no structure can, because a model reading a delimiter is still a model reading
+text. What actually holds the line is elsewhere: a deterministic criterion is never turned into
+a question, so the judge is never asked about a fact code already decided, and a confident "yes"
+cannot lift a criterion a check already failed.
+
+**Deterministic facts outrank model opinions, and when the two conflict the deterministic side
+wins.** The order is deliberate. `decideCompletion` evaluates the code-computed fact first: a
+`fail` is final, and the criterion never becomes a question. A `pass` needs independent trust,
+full coverage and freshness; a model probability cannot supply any of those. The only place a
+probability is allowed in is a semantic criterion with no deterministic check. When the judge
+approves while code found a failure, the verdict is `not_done` and the disagreement is recorded
+in the reason codes as `deterministic_conflict_with_claim` — recorded rather than hidden, since
+a report that conceals the disagreement is useless for tuning the rubric.
+
+**An unreachable judge yields `unverified`, which is never a silent block.** A missing answer, a
+malformed answer, a timeout, an exhausted retry budget and an absent API key all leave their
+criterion `unverified` and the run at exit `3`. That is the fail-open rule, and it exists because
+the opposite failure has already happened in practice: a checker that could not answer was read
+as a refusal, and an entire pipeline stopped with no explanation. "No answer" and "forbidden"
+are different facts. Exit `3` means "not confirmed — a human decides", and every integration is
+told to treat it that way. The gate never refuses on its own behalf.
+
+**The DSH adapter is advisory on the harness build it targets, and that is a property of the
+build, not a choice.** Three limits, each verified against the installed files and each reported
+per capability by `adapters/dsh/doctor.mjs`:
+
+- It cannot veto a turn. `Stop` is a bounded steer: the adapter asks for one more step, a fixed
+  number of times, then goes quiet and records the run as incomplete. A run that exhausts the
+  budget ends as incomplete, not as confirmed.
+- It cannot undo a side effect. `PostToolUse` runs after the effect has happened, and the hook
+  payload cannot roll it back.
+- It cannot see a structured exit code through the hook payload. The payload carries rendered
+  text only, so the exit code is inferred from a `[exit code: N]` marker in that text. The
+  observation is labelled `coverage: "partial"` with `exitSource: "text_inference"`, and a
+  partial observation can never confirm a criterion on its own.
+
+The doctor exists so this is answered per installation rather than promised in a README. On the
+build checked in this repository the bridge is not even mounted, and the doctor reports
+`degraded`. A gate that is not mounted protects nothing, and saying so is the point.

@@ -168,53 +168,85 @@ node scripts/jev-gateway.mjs --rules        # вся таблица правил
 Порядок жёсткий: **сделать работу → прочитать цель → собрать доказательства → судить.**
 Судить отчёт об успехе, не прочитав цель, — это добавить ещё одно мнение, а не доказательство.
 
-Записываем, что именно утверждается и чем это проверяется кодом:
+Записываем, что именно утверждается и **чем** это проверяется. В v2 каждый критерий
+объявляет способ проверки, и всё, что может решить код, решает код:
 
 ```json
 {
-  "task": "fix the failing test in src/a.ts",
-  "claimed": "the test is green, the type check and the linter are green too",
-  "criteria": ["the previously failing test passes", "the changed file was read back after writing"],
-  "evidence": {
-    "writes": [{ "path": "src/a.ts", "bytes": 1204, "read_after": true }],
-    "commands": [
-      { "cmd": "npx vitest run src/a.test.ts", "exit": 0, "expect_exit": 0, "tail": "Tests 3 passed" },
-      { "cmd": "npx tsc --noEmit", "exit": 0, "expect_exit": 0 }
-    ],
-    "artifacts": [{ "path": "reports/test-fix.md", "bytes": 812, "exists": true }]
-  }
+  "schemaVersion": 2,
+  "taskId": "fix-failing-test",
+  "runId": "run-1",
+  "projectRoot": ".",
+  "criteria": [
+    { "id": "test-green", "text": "the previously failing test passes", "kind": "deterministic",
+      "required": true, "evidenceRefs": ["cmd-1"],
+      "check": { "type": "command_exit", "ref": "cmd-1", "expectExit": 0 } },
+    { "id": "report-written", "text": "the report was written and read back", "kind": "deterministic",
+      "required": true, "verificationScope": ["reports/test-fix.md"], "evidenceRefs": ["art-1"],
+      "check": { "type": "read_after_write", "ref": "art-1" } },
+    { "id": "fix-addresses-root-cause", "text": "the change addresses the cause, not the symptom",
+      "kind": "semantic", "required": true }
+  ],
+  "observations": [
+    { "observationId": "cmd-1", "kind": "command", "executable": "npx", "argv": ["vitest", "run"],
+      "status": "completed", "exit": 0, "coverage": "full", "sourceTrust": "harness_observed",
+      "capturedAt": "2026-09-22T11:59:00.000Z" },
+    { "observationId": "art-1", "kind": "artifact", "path": "reports/test-fix.md",
+      "existence": true, "bytes": 812, "coverage": "full", "sourceTrust": "collector_observed",
+      "capturedAt": "2026-09-22T11:59:30.000Z" }
+  ]
 }
 ```
 
 ```bash
-node scripts/jev-gate.mjs --claims examples/claims.example.json --dry   # что увидит модель
-node scripts/jev-gate.mjs --claims examples/claims.example.json
+node scripts/jev-gate.mjs --request examples/completion.example.json --collect reports/test-fix.md
+node scripts/jev-gate.mjs --request examples/completion.example.json --offline   # не звать судью
 ```
 
-`--dry` печатает посчитанное состояние и вопросы, не вызывая никого, — самый дешёвый способ
-понять, стоят ли ваши доказательства судейства.
+`kind: "deterministic"` означает, что **решает код, а модель об этом не спрашивают**.
+Вопросом становится только `kind: "semantic"`. `--collect` измеряет названные артефакты и
+никогда не запускает команды: проверяльщик, который что-то исполняет, сам создаёт побочные
+эффекты.
 
-Вывод разделяет **посчитанное кодом** и **вынесенное моделью**:
+Отчёт разделяет **посчитанное кодом** и **вынесенное моделью**:
 
 ```
 VERDICT: CONFIRMED
-reason: all 6 questions passed
-evidence: {"writes":1,"writesRead":1,"commands":3,"cmdsOk":3,"artifacts":1,"artsOk":1,"criteria":3}
+reason: all 3 required criteria are supported by independent evidence; the thresholds were not calibrated on this task
+reason codes: all_required_criteria_passed, thresholds_uncalibrated
+evidence: {"criteriaTotal":3,"requiredTotal":3,"passed":3,"failed":0,"review":0,"unverified":0,"evidenceBacked":2,"judged":1,"deterministicFailures":[]}
+source trust: collector_observed; calibrated: false; mode: completion
 
-  read_after_write     0.98   yes
-  reproduced           0.96   yes
-  artifacts_present    0.96   yes
-  criterion_1          0.94   yes
-  criterion_2          0.97   yes
-  criterion_3          0.98   yes
+  test-green             pass              -     pass
+  report-written         pass              -     pass
+  fix-addresses-root-cause unknown          0.93   pass
 
-model jev-1.13.0, input 975 tokens, $0.000041
+judge: ok
 limit: this gate checks that the evidence is consistent, not that it is true.
+limit: local evidence has tamperResistance "none" — it can be altered by a process with the same write access.
 ```
 
-Неприменимые вопросы **не задаются**. Нет файлов, команд, артефактов и критериев — судить
-нечего, гейт выходит с кодом `3` и сообщением «NOTHING TO CHECK». Это не «готово», это
-отсутствие доказательств.
+Неприменимые вопросы **не задаются**. Когда проверять нечего, гейт выходит с кодом `3` и
+сообщением «NOTHING TO CHECK». Это не «готово», это отсутствие доказательств.
+
+### Файл утверждений v1 больше не может сказать «готово»
+
+Это намеренно и это ломающее изменение. Файл v1 — это **самоотчёт по определению**: агент сам
+записал свои коды выхода, а самоотчёт не может поднять уровень доказательности. Поэтому v1
+теперь выходит с кодом `3`:
+
+```
+VERDICT: UNVERIFIED
+reason: a v1 claims file carries self-reported evidence only; legacy-1: no usable answer; the thresholds were not calibrated on this task
+reason codes: legacy_untrusted, judge_abstained, thresholds_uncalibrated
+
+a v1 claims file is self-reported evidence: it cannot confirm anything on its own.
+this is NOT "done" and NOT "forbidden": nothing is confirmed, a human decides.
+```
+
+`unverified` — это не блокировка и не отказ. Это честный ответ, и решение остаётся за
+человеком. Как перевести файл v1 в запрос v2 — [`docs/MIGRATION.md`](docs/MIGRATION.md).
+
 
 > [!IMPORTANT]
 > **Чего он не делает:** проверяет согласованность доказательств с утверждением, а не их

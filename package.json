@@ -1,6 +1,6 @@
 {
   "name": "jev-gates",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Three gates for any coding agent: a deterministic approval gate before irreversible actions, a completion gate that demands evidence instead of «done», and a rubric regression gate. Powered by TypeSafe Jev (System One).",
   "type": "module",
   "license": "MIT",
@@ -12,24 +12,38 @@
     "jev-gateway": "scripts/jev-gateway.mjs",
     "jev-gate": "scripts/jev-gate.mjs",
     "jev-evals": "scripts/jev-evals.mjs",
-    "jev-decisions": "scripts/jev-decisions.mjs"
+    "jev-decisions": "scripts/jev-decisions.mjs",
+    "jev-replay": "scripts/jev-replay.mjs",
+    "jev-dsh-doctor": "adapters/dsh/doctor.mjs",
+    "jev-dsh-bridge": "adapters/dsh/bridge.mjs",
+    "jev-dsh-install": "adapters/dsh/install.mjs"
   },
   "files": [
+    "lib",
     "scripts",
     "fixtures",
     "examples",
     "docs",
+    "skills",
+    "adapters",
     "assets",
     "README.md",
     "README.ru.md",
     "LICENSE"
   ],
   "scripts": {
-    "test": "node test/selftest.mjs",
+    "test": "node --test",
+    "test:offline": "node --test",
     "gateway": "node scripts/jev-gateway.mjs",
     "gate": "node scripts/jev-gate.mjs",
     "evals": "node scripts/jev-evals.mjs",
-    "decisions": "node scripts/jev-decisions.mjs"
+    "decisions": "node scripts/jev-decisions.mjs",
+    "replay": "node scripts/jev-replay.mjs",
+    "doctor": "node adapters/dsh/doctor.mjs",
+    "test:dsh": "node --test test/dsh-adapter.test.mjs",
+    "dsh:plan": "node adapters/dsh/install.mjs plan",
+    "dsh:install": "node adapters/dsh/install.mjs install --apply",
+    "dsh:uninstall": "node adapters/dsh/install.mjs uninstall --apply"
   },
   "keywords": [
     "jev",

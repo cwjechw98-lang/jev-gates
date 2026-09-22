@@ -29,7 +29,10 @@ A harness can host a gate if its hook mechanism provides all four of the followi
 | `0` | Allow (approval) / confirmed (completion) / rubric passed all gates (Jevals) |
 | `1` | Not done (completion) / rubric failed (Jevals) |
 | `2` | Ask the human (approval) / human review (completion) |
-| `3` | Unverified — the judge was unavailable. This is **not** a prohibition. |
+| `3` | Unverified — the judge was unavailable, **or** the input could not be trusted. This is **not** a prohibition. |
+
+Since v2, a v1 claims file always exits `3`: it carries self-reported evidence, and self-report
+cannot raise the evidence level. See [`MIGRATION.md`](MIGRATION.md).
 
 ### The fail-open rule
 
@@ -58,8 +61,13 @@ its optional `if` field uses permission-rule syntax: `"Bash(git push *)"` matche
 
 **Input.** Tool events carry `tool_name` and `tool_input`; the documented example is
 `{ "tool_name": "Bash", "tool_input": { "command": "rm -rf /tmp/build" }, … }`, plus
-`session_id`, `cwd`, and `transcript_path`. `Stop` adds `stop_hook_active`, true when this
-stop already exists because a previous stop hook blocked.
+`session_id`, `cwd`, and `transcript_path`. `Stop` is *documented* to add `stop_hook_active`,
+"true when this stop already exists because a previous stop hook blocked".
+
+> [!WARNING]
+> On DeepSeek Harness `0.1.5-rc.2` that field is **hardcoded `false` and never read back from
+> the hook's output**, so a loop guard written against it never fires. Bound the steering with
+> your own counter. Verified in [`DSH.md`](DSH.md).
 
 **Output.** Exit `0` means no decision — the normal permission flow applies, so staying
 silent does not approve anything. Exit `2` blocks, and stderr is shown to the model. Every
@@ -67,6 +75,30 @@ other code, including `1`, is a non-blocking error: the hook is considered to ha
 and the action proceeds. For structured control, print JSON on stdout instead.
 `permissionDecision` accepts `allow`, `deny`, `ask`, `defer`; the most restrictive answer
 wins in the order `deny`, `defer`, `ask`, `allow`.
+
+> [!IMPORTANT]
+> **This is the dialect, not every implementation of it.** DeepSeek Harness `0.1.5-rc.2`
+> accepts only `allow`, `deny` and `ask`, drops `defer`, silently ignores a **top-level**
+> `{"decision":"deny"}`, and discards the whole `hookSpecificOutput` block if
+> `hookEventName` does not match the firing point. It also does not honour `updatedInput`.
+> Write to the intersection unless you know which build you are on — the per-build facts and
+> their citations are in [`DSH.md`](DSH.md).
+
+> [!CAUTION]
+> **A hook that cannot launch looks exactly like a gate that chose to stay silent.**
+> On DeepSeek Harness the bridge injects `shell` and calls `shell.resolve()` for every
+> hook. The shipped sandboxed executors (`dsh-pwsh-sandbox` on Windows, `dsh-bash-sandbox`
+> elsewhere) need `sandboxPolicy`, which the bridge does not inject, so `resolve()` throws
+> `cannot get property "sandboxPolicy" without inject`. `runHook` catches that and returns
+> an outcome with **no decision**, the merge yields `allow`, and the tool runs.
+>
+> Measured, not inferred: `node scripts/jev-dsh-acceptance.mjs` drives the real harness in
+> a throwaway `DSH_HOME` with no model and reports whether a denied command actually stayed
+> unrun. On the shipped profiles it does **not** — the forbidden command executes. Treat
+> PreToolUse enforcement on this harness as **conditional on a `shell` service the bridge
+> can drive**, and never as a control you have verified because the hook is registered.
+> The adapter's `doctor` reports exactly this instead of claiming the capability.
+
 
 Both hooks in `.claude/settings.json`. `Stop` has no matcher support and fires every turn.
 ```json
@@ -99,18 +131,34 @@ travels as JSON and the process exits `0`.
 ```sh
 #!/bin/sh
 set -u
-# Anti-loop: one push-back per stretch of work, or an unsatisfiable gate wedges the session.
-printf '%s' "$(cat)" | grep -Eq '"stop_hook_active"[[:space:]]*:[[:space:]]*true' && exit 0
-node "${CLAUDE_PROJECT_DIR}/scripts/jev-gate.mjs" --claims "${CLAUDE_PROJECT_DIR}/claims.json"
+# Anti-loop. On DeepSeek Harness this MUST be a real counter: the payload field
+# `stop_hook_active` is hardcoded to false and never read back, so a guard written
+# against it never fires and the session can be steered forever.
+STATE="${TMPDIR:-/tmp}/jev-stop-$$"
+COUNT=$(cat "$STATE" 2>/dev/null || echo 0)
+[ "$COUNT" -ge 2 ] && exit 0
+echo $((COUNT + 1)) > "$STATE"
+
+# A v1 claims file is self-reported, so it can only ever exit 3 — use a v2 request.
+node "${CLAUDE_PROJECT_DIR}/scripts/jev-gate.mjs" --request "${CLAUDE_PROJECT_DIR}/request.json"
 rc=$?
 case "$rc" in
   0) exit 0 ;;   # confirmed: let the turn end
-  1) printf '%s\n' '{"decision":"block","reason":"jev completion gate: not done - evidence does not confirm the claim."}'; exit 2 ;;
-  2) printf '%s\n' '{"decision":"block","reason":"jev completion gate: human review required."}'; exit 2 ;;
+  1) printf '%s\n' '{"decision":"block","reason":"jev completion gate: not done - evidence does not confirm the claim."}'; exit 0 ;;
+  2) printf '%s\n' '{"decision":"block","reason":"jev completion gate: human review required."}'; exit 0 ;;
   3) printf 'jev completion gate: unverified (judge unavailable), not blocking\n' >&2; exit 0 ;;
   *) printf 'jev completion gate: unexpected code %s, not blocking\n' "$rc" >&2; exit 0 ;;
 esac
 ```
+
+The decision travels as JSON and the process exits `0`; a hook exit `2` would discard stdout and
+hand the model a bare stderr string instead of a reason.
+
+**Stop is a steer, not a veto.** On DeepSeek Harness a Stop hook requests one more step and the
+turn closes as soon as the inbox drains; the dispatch is even skipped when the inbox is already
+non-empty. `{"continue": false}` alone does **not** block anything in that build. Bound the
+steering yourself, as above, and never describe this as enforcement. See
+[`DSH.md`](DSH.md) for the citations.
 The documented block form is `{"decision": "block", "reason": "…"}` on stdout, or exit `2`
 with the reason on stderr; the adapter emits both. Add `--dry` to print state and questions
 without calling the model.
@@ -139,7 +187,7 @@ jobs:
       - uses: actions/checkout@v7
       - name: Completion gate
         if: ${{ env.TYPESAFE_API_KEY != '' }}
-        run: node scripts/jev-gate.mjs --claims claims.json
+        run: node scripts/jev-gate.mjs --request request.json
       - name: Rubric regression stand
         if: ${{ env.TYPESAFE_API_KEY != '' }}
         run: node scripts/jev-evals.mjs run fixtures/claim-support.json
@@ -164,7 +212,7 @@ a mandatory step before declaring the task done. The rule body is the same:
 The order is act → read the target → collect evidence → judge. Never report a task as done
 on the strength of memory.
 
-    node scripts/jev-gate.mjs --claims claims.json
+    node scripts/jev-gate.mjs --request request.json
 
 Read the exit code: 0 confirmed, 1 not done, 2 human review, 3 unverified. Report 1 as not
 done. On 3, say plainly that the judge was unavailable; 3 is not a prohibition.
@@ -228,7 +276,7 @@ not forbidden" — report it and continue.
 | --- | --- | --- |
 | Claude Code | verified — [hooks reference](https://code.claude.com/docs/en/hooks), [hooks guide](https://code.claude.com/docs/en/hooks-guide) | `PreToolUse` for approval (scoped to `Bash(git push *)`), `Stop` for completion; configured in `.claude/settings.json` |
 | GitHub Actions | verified — [contexts reference](https://docs.github.com/en/actions/reference/workflows-and-actions/contexts), [job conditions](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-jobs-with-conditions) | Ordinary workflow steps; no approval gate in CI; secret carried through job-level `env`, tested with `env.*` in the step condition |
-| DeepSeek Harness (DSH) | contract only — verify your harness's hook API | Rule in `AGENTS.md` and in the completion skill; gate invoked as a plain command |
+| DeepSeek Harness (DSH) | protocol-tested, runtime-unverified as an enforcement point — see the caution above and `scripts/jev-dsh-acceptance.mjs` | `PreToolUse` via the harness's Claude Code bridge, `Stop` for completion; on the shipped profiles the bridge cannot launch a hook at all, so treat the gate as advisory until the acceptance script says otherwise |
 | OpenAI Codex / AGENTS.md-compatible | contract only — verify your harness's hook API | Instruction file; gate as a mandatory step before the agent declares the task done |
 | Plain shell / git hooks | contract only — verify your harness's hook API | `.git/hooks/pre-push`; non-zero exit aborts the push |
 | Cursor, opencode, Hermes, Aider, others | contract only — verify your harness's hook API | Wherever the harness can run a command; call `scripts/jev-any-harness.sh` and map the four codes |
