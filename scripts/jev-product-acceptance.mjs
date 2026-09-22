@@ -474,6 +474,24 @@ async function main() {
   const notDriven = sets.filter((s) => s.class === 'not-driven').map((s) => s.set);
   const failed = sets.filter((s) => !['held', 'not-driven'].includes(s.class)).map((s) => s.set);
 
+  // Authority is reported from measurements, not from a promise.
+  //
+  // A self-declared "I did not touch the active profile" is precisely the kind of
+  // claim this product exists to distrust, so the field is derived: the install
+  // set's witness observes the real home before and after, and its verdict is what
+  // decides the value. If that set did not run, the honest answer is `unknown`.
+  const installSet = sets.find((s) => s.set === 'install');
+  const witnessCheck = installSet?.checks?.find((c) => c.name === 'install:active-home-untouched');
+  const activeProfileTouched = witnessCheck ? !witnessCheck.ok : 'unknown';
+
+  let unpushed = null;
+  try {
+    const out = execFileSync('git', ['rev-list', '--count', 'origin/main..HEAD'], { cwd: REPO, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+    unpushed = Number(out);
+  } catch {
+    unpushed = null;
+  }
+
   const verdict = failed.length > 0 ? 'not-held' : notDriven.length > 0 ? 'not-driven' : 'held';
   const exitCode = verdict === 'held' ? 0 : verdict === 'not-held' ? 1 : 3;
 
@@ -484,12 +502,14 @@ async function main() {
     generatedAt: new Date().toISOString(),
     durationMs: Date.now() - started,
     harness: { entry, version: harnessVersion(entry), node: process.version, platform: process.platform },
-    // Stated as facts a reader can check, not as assurances.
     authority: {
       paidApiCalls: 0,
-      activeProfileTouched: false,
-      pushed: false,
-      note: 'the acceptance installs into a throwaway home and never writes to the active DSH home',
+      // Measured by the install set's read-only witness, not asserted.
+      activeProfileTouched,
+      // Measured from git: how many local commits are not on the remote.
+      unpushedCommits: unpushed,
+      pushed: unpushed === 0,
+      note: 'the acceptance installs into a throwaway home; activeProfileTouched comes from the install set witness, and pushed from git rev-list',
     },
     sets: sets.map((s) => ({ set: s.set, class: s.class, checks: s.checks, ...(s.mode ? { mode: s.mode } : {}), ...(s.limits ? { limits: s.limits } : {}) })),
     capabilities,

@@ -20,3 +20,6 @@ Thumbs.db
 .acceptance/
 .iso-dsh/
 .iso-project/
+
+# Real-agent-loop acceptance scratch (scripts/jev-agent-acceptance.mjs)
+.agent-acceptance/
