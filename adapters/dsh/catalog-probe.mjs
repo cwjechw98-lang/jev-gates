@@ -1,5 +1,5 @@
 /**
- * Report the harness's own tool catalog.
+ * Report the harness's own tool catalog — the **global** view.
  *
  * This exists because "the tool is registered" is a claim about the *catalog the
  * model sees*, not about a function existing in a module. A plugin can export a
@@ -7,10 +7,24 @@
  * a registration that threw — and no unit test can tell the difference. The only
  * honest check is to boot the harness and read what it ended up with.
  *
+ * **Its limit, measured rather than assumed.** Tool definitions are visible per
+ * agent scope: `schemas(scope?)` and `get(name, scope?)` take the viewing agent,
+ * and omitting the scope gives the global view. A bare `probe` boot creates no
+ * agent, so this probe reports an empty catalog — and not only of our tools:
+ * `get('pwsh')` and `get('read')` are `undefined` too. That emptiness is the
+ * instrument, not the product, and it is why this file cannot by itself prove
+ * the six tools reach a model.
+ *
+ * The authoritative catalog check therefore lives in the agent lane:
+ * `adapters/dsh/agent-scenarios.mjs` reads `ctx.tools.schemas(agent)` inside
+ * `agent/created`, driven by `scripts/jev-agent-acceptance.mjs`. This probe
+ * remains useful for the global view and for confirming that a boot reaches the
+ * point where services resolve at all.
+ *
  * It is a separate row from the tools it observes, so the probe cannot be the
  * thing under test, and it declares `loader` so it can wait until every row has
  * finished mounting. Without that wait it would race the registration it is
- * meant to verify and report an empty catalog as if it were a fact.
+ * meant to verify.
  */
 import { writeFileSync } from 'node:fs';
 

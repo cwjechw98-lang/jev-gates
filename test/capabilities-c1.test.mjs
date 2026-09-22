@@ -17,8 +17,10 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { CAPABILITY_STATUS } from '../lib/capability.mjs';
+import { validateRequest } from '../lib/contracts.mjs';
+import { JUDGE_STATUS, buildQuestions } from '../lib/judge.mjs';
 import { STATUS, STATUS_EXIT } from '../lib/policy.mjs';
-import { eventFromToolResult, verifyCompletion } from '../lib/verify.mjs';
+import { eventFromToolResult, judgeFromClient, verifyCompletion } from '../lib/verify.mjs';
 
 /** A scratch directory that is removed when the test finishes. */
 function scratch(t) {
@@ -281,4 +283,79 @@ test('C1: the envelope is versioned and carries taskId/runId', async () => {
   assert.equal(envelope.runId, 'run-9');
   assert.equal(envelope.capability, 'jev_verify_completion');
   assert.ok(typeof envelope.envelopeVersion === 'number');
+});
+
+test('C1: every judge status the adapter emits is a real member of JUDGE_STATUS', async () => {
+  const members = new Set(Object.values(JUDGE_STATUS));
+  // A status that is not a member becomes `undefined`, which decideCompletion then
+  // compares against strings and silently fails to match — a judge that failed
+  // would be reported as a judge that answered. This was a real defect: the adapter
+  // reached for `JUDGE_STATUS.error`, which does not exist.
+  const questions = buildQuestions(
+    [{ id: 'c1', text: 'the fix is complete', kind: 'semantic', required: true }],
+    [{ criterionId: 'c1', result: 'unknown', supported: true }],
+  );
+  const good = { ok: true, json: { answers: { c1: { type: 'noul', noul: 0.9 } } } };
+  const cases = [
+    { name: 'an answer arrives', transport: { async postJson() { return good; } }, expect: JUDGE_STATUS.ok },
+    // An empty answer *object* is a reachable judge that answered nothing: `ok`
+    // with no usable answers, which decideCompletion then treats per criterion.
+    // An answer *array* is not an answer object at all, which is the abstention.
+    { name: 'the judge answers nothing', transport: { async postJson() { return { ok: true, json: { answers: {} } }; } }, expect: JUDGE_STATUS.ok },
+    { name: 'the judge returns no answer object', transport: { async postJson() { return { ok: true, json: { answers: [] } }; } }, expect: JUDGE_STATUS.abstained },
+    { name: 'the judge is unreachable', transport: { async postJson() { throw new Error('ECONNREFUSED'); } }, expect: JUDGE_STATUS.unavailable },
+    { name: 'the transport fails', transport: { async postJson() { return { ok: false, status: 500, json: {} }; } }, expect: JUDGE_STATUS.unavailable },
+  ];
+  for (const { name, transport, expect } of cases) {
+    const judge = judgeFromClient({ apiKey: 'test-key-not-real', transport });
+    const out = await judge({ state: {}, questions });
+    assert.ok(members.has(out.status), `${name}: status ${String(out.status)} is not a member of JUDGE_STATUS`);
+    assert.equal(out.status, expect, name);
+  }
+});
+
+test('C1: an abstaining judge does not confirm completion', async (t) => {
+  const dir = scratch(t);
+  writeFileSync(join(dir, 'out.txt'), 'hello', 'utf8');
+  // A semantic criterion carries no `check` by contract: the route is chosen by
+  // `kind`, and the two routes are exclusive. Asking for both is rejected.
+  const request = {
+    schemaVersion: 2,
+    taskId: 'task-1',
+    runId: 'run-1',
+    mode: 'completion',
+    criteria: [
+      { id: 'quality', text: 'the document explains the design', kind: 'semantic', required: true, verificationScope: ['out.txt'] },
+    ],
+    claims: { task: 'document it', claimed: 'documented' },
+  };
+  const envelope = await verifyCompletion({
+    taskId: 'task-1',
+    runId: 'run-1',
+    request,
+    artifacts: ['out.txt'],
+    projectRoot: dir,
+    judge: async () => ({ status: JUDGE_STATUS.abstained, answers: {}, answerErrors: [], reason: 'no answer object' }),
+  });
+  assert.notEqual(envelope.decision.completionStatus, STATUS.done, 'an abstention is never a confirmation');
+});
+
+test('C1: a criterion cannot be both semantic and deterministically checked', () => {
+  // Supplying both used to be resolved silently in favour of the check, so an
+  // author who asked for a semantic judgement got a file-existence test and the
+  // declared `kind` was discarded. The ambiguity is now an error.
+  const { errors } = validateRequest({
+    schemaVersion: 2,
+    taskId: 'task-1',
+    runId: 'run-1',
+    mode: 'completion',
+    criteria: [
+      { id: 'quality', text: 'the document explains the design', kind: 'semantic', required: true, check: { type: 'artifact_exists', ref: 'out.txt' } },
+    ],
+    claims: { task: 't', claimed: 'c' },
+  });
+  assert.ok(
+    errors.some((e) => e.code === 'contradictory_criterion'),
+    `expected contradictory_criterion, got ${JSON.stringify(errors.map((e) => e.code))}`,
+  );
 });

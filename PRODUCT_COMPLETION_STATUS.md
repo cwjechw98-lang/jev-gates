@@ -36,7 +36,8 @@ That distinction is the whole point of the column.
 | statuses never mixed with authorisation | `actionAuthority` is always `'none'`; asserted in C1 tests and in the envelope builder | `offline-tested` |
 | `off` / `advisory` / `shadow` modes | `CAPABILITY_MODE`, `resolveMode`; each tool can be disabled per row | `offline-tested` |
 | timeout / cancellation / budget | `withBudget` wraps every model call; a timeout is its own reason code | `offline-tested` |
-| CLI **and** real registration in an isolated DSH | `adapters/dsh/tools.mjs` registers six tools via `ctx.tools.register`; `adapters/dsh/catalog-probe.mjs` reads the catalog back | registration `runtime-tested`; catalog read pending the agent set |
+| CLI **and** real registration in an isolated DSH | `adapters/dsh/tools.mjs` registers six tools via `ctx.tools.register`; `scripts/jev-install.mjs` writes the patch; the acceptance's `install:patch-appears-in-composition` asks the harness to dump its own composed tree and finds both rows there | `runtime-tested` (row mount) |
+| the tools are in the catalog a model actually sees | read in **agent scope** (`schemas(scope?)`), because a bare boot has no agent and reports an empty global view — including `pwsh` and `read` | see the agent set in `PRODUCT_ACCEPTANCE.json` |
 | one skill per capability | `skills/jev-completion-gate`, `jev-skill-route`, `jev-progress-review`, `jev-review-scope`, `jev-context-plan`, `jev-diagnose` | `implemented` |
 | journal sufficient for replay | `lib/journal.mjs` (`JOURNAL_VERSION=2`, `REPLAY_MODE`) unchanged and still covered | `offline-tested` |
 | one success, one indeterminate, one error example | `docs/CLI.md`, and the C1 tests carry all three paths | `offline-tested` |

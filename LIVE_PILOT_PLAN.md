@@ -30,42 +30,59 @@ goes wrong, deleting one directory returns the machine to its current state.
 
 ### Steps
 
-1. **Install the kit into the pilot home.**
-   ```powershell
-   node C:\Users\katoc\jev-gates\scripts\jev-install.mjs --home C:\Users\katoc\.dsh-pilot --profile jev-pilot
-   ```
-   The installer refuses to touch the active home without `--allow-active-home`, so
-   this command cannot reach it.
+> **Order matters.** Create the profile **before** installing. `--from-default-profile`
+> regenerates `cordis.patch.yml`, so installing first means the kit's rows are
+> overwritten by an empty patch. This was found by running it, not by reading it.
 
-2. **Create the pilot profile from the headless default.**
+1. **Create the pilot profile from the headless default.**
    ```powershell
    $env:DSH_HOME='C:\Users\katoc\.dsh-pilot'
    node <dsh>\lib\bin.js --profile jev-pilot --from-default-profile headless --dump-config
    ```
 
-3. **Mount the kit's row and confirm the catalog.**
-   Boot with the generated patch and read the catalog back:
+2. **Install the kit into the pilot home.**
+   ```powershell
+   node C:\Users\katoc\jev-gates\scripts\jev-install.mjs --home C:\Users\katoc\.dsh-pilot --profile jev-pilot
+   ```
+   The installer refuses `~/.dsh` without `--allow-active-home`, so this command
+   cannot reach the live home. Because `DSH_HOME` is already exported in this
+   shell, it prints a warning that this is the shell's DSH_HOME — expected here,
+   and the reason the warning exists rather than a refusal.
+
+3. **Confirm the row is really in the composition.**
+   ```powershell
+   node <dsh>\lib\bin.js --profile jev-pilot --dump-config | Select-String 'jev-tools'
+   ```
+   Reading the patch file back only proves a file was written. The dump proves the
+   loader applied it. Expected: the `jev-tools` and `jev-adapter` rows appear.
+
+4. **Confirm the tools reach a model's catalog.**
+   Boot a session and read the catalog **in agent scope**:
    ```powershell
    $env:JEV_CATALOG_OUT='C:\Users\katoc\.dsh-pilot\catalog.json'
    node <dsh>\lib\bin.js --profile jev-pilot --patch <pilot>\overlay.yml probe
    ```
-   Expected: `allPresent: true`, `allDescribed: true`, `allWithParameters: true` for
-   all six `jev_*` tools.
+   A bare `probe` boot creates no agent, and tool definitions are visible per
+   agent scope, so a bare boot reports an **empty catalog** — including `pwsh`
+   and `read`. That is the instrument, not the product. The catalog must be read
+   from `agent/created`; `scripts/jev-agent-acceptance.mjs` is the working
+   example. Expected: all six `jev_*` tools present, each with a description and
+   `parameters.type === 'object'`.
 
-4. **Run one real session with a real model, in advisory mode only.**
+5. **Run one real session with a real model, in advisory mode only.**
    Use a free model route from `$DSH_HOME/settings.yaml` → `llm-pi-ai.providers`
    (any id ending in `:free`). Give it one task that should trigger a gate:
    *"Create `out.txt` with the text hello, then verify the task is complete using
    `jev_verify_completion` with the artifact `out.txt`."*
 
-5. **Check the outcome by reading, not by asking.**
+6. **Check the outcome by reading, not by asking.**
    - the tool appears in the session's tool list;
    - the call happens and returns an envelope;
    - the envelope's `decision.completionStatus` is `done` **and** `evidence` contains
      a `collector_observed` ref — not a `self_reported` one;
    - delete `out.txt` and re-run: the status must become `unverified`, never `done`.
 
-6. **Exercise the approval boundary once, manually.**
+7. **Exercise the approval boundary once, manually.**
    Ask the agent to run a command the adapter's rules flag. Expected: the call is
    denied or asks, and the reason names `authorization_unavailable` when there is no
    approval service. This is the one check that cannot be automated non-interactively
@@ -75,11 +92,12 @@ goes wrong, deleting one directory returns the machine to its current state.
 
 | claim | proven by |
 |---|---|
-| the harness loads the kit and the tools reach the model | steps 3–4 |
-| a real model can call a tool and get a usable envelope | step 4 |
-| trust is assigned by the acquisition path, not the request | step 5 |
-| a missing artifact does not confirm completion | step 5 |
-| the guard surface denies rather than staying silent | step 6 |
+| the kit's rows reach the harness composition | step 3 |
+| the harness loads the kit and the tools reach the model | step 4 |
+| a real model can call a tool and get a usable envelope | step 5 |
+| trust is assigned by the acquisition path, not the request | step 6 |
+| a missing artifact does not confirm completion | step 6 |
+| the guard surface denies rather than staying silent | step 7 |
 
 ### What Stage 1 does NOT prove
 
