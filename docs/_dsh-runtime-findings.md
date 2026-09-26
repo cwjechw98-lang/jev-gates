@@ -2,10 +2,10 @@
 
 Read-only investigation of the **installed** DeepSeek Harness on Windows.
 
-- Install root: `C:\Users\katoc\AppData\Roaming\npm\node_modules\@deepseek-ai\dsh`
-- Nested packages: `C:\Users\katoc\AppData\Roaming\npm\node_modules\@deepseek-ai\dsh\node_modules\@deepseek-ai\`
+- Install root: `C:\Users\you\AppData\Roaming\npm\node_modules\@deepseek-ai\dsh`
+- Nested packages: `C:\Users\you\AppData\Roaming\npm\node_modules\@deepseek-ai\dsh\node_modules\@deepseek-ai\`
   (found; 250+ `dsh-*` packages, including `dsh-hooks-claude-code`, `dsh-hooks-codex`, `dsh-hook-protocol`, `dsh-user-approval`)
-- `DSH_HOME` = `C:\Users\katoc\.dsh` (confirmed from the live env: `DSH_HOME=C:\Users\katoc\.dsh`, `DSH_WEB_URL=http://127.0.0.1:3080`)
+- `DSH_HOME` = `C:\Users\you\.dsh` (confirmed from the live env: `DSH_HOME=C:\Users\you\.dsh`, `DSH_WEB_URL=http://127.0.0.1:3080`)
 - Version `0.1.5-rc.2` confirmed: `dsh\package.json:55-56` pins `"@deepseek-ai/dsh-hooks-claude-code": "^0.1.5-rc.2"`, `"@deepseek-ai/dsh-hooks-codex": "^0.1.5-rc.2"`
 
 Nothing was modified. No DSH process was started. No network call was made. Secret files were not opened.
@@ -1023,8 +1023,8 @@ Only `type: "command"` hooks run; other handler types are skipped with a warning
 
 ### 6.4 What is NOT present on this machine
 
-- **No `hooks.json` anywhere** under the install root or in `C:\Users\katoc\.dsh` (searched by filename — 0 results).
-- **No composition row** referencing `hooks-claude-code`, `hooks-codex`, or `dsh-hook` in any `*.yml`/`*.yaml` under the install root or under `C:\Users\katoc\.dsh` (searched — the only hits are two `README.i18n.yaml` comments).
+- **No `hooks.json` anywhere** under the install root or in `C:\Users\you\.dsh` (searched by filename — 0 results).
+- **No composition row** referencing `hooks-claude-code`, `hooks-codex`, or `dsh-hook` in any `*.yml`/`*.yaml` under the install root or under `C:\Users\you\.dsh` (searched — the only hits are two `README.i18n.yaml` comments).
 - The packages are present only as **dependencies of the `dsh` metapackage**:
 
 `dsh/package.json:55-56`
@@ -1113,11 +1113,11 @@ A native/dynamic Cordis plugin can observe **structured** tool outcomes — `exe
 
 ### 8.1 Which profile is live
 
-Live env: `DSH_HOME=C:\Users\katoc\.dsh`, `DSH_WEB_URL=http://127.0.0.1:3080`, `DSH_SESSION_ID=6c6f5d36-7f64-4561-81ea-1fab8d9a35b0`. The Web GUI is served by the **`web`** profile.
+Live env: `DSH_HOME=C:\Users\you\.dsh`, `DSH_WEB_URL=http://127.0.0.1:3080`, `DSH_SESSION_ID=6c6f5d36-7f64-4561-81ea-1fab8d9a35b0`. The Web GUI is served by the **`web`** profile.
 
-`C:\Users\katoc\.dsh\profiles` contains: `headless`, `rescue`, `tui`, `web`, `web.empty-backup-20260828-1248` (+ `node_modules`).
+`C:\Users\you\.dsh\profiles` contains: `headless`, `rescue`, `tui`, `web`, `web.empty-backup-20260828-1248` (+ `node_modules`).
 
-`C:\Users\katoc\.dsh\profiles\web\cordis.yml` (entire file, 4 lines):
+`C:\Users\you\.dsh\profiles\web\cordis.yml` (entire file, 4 lines):
 ```yaml
 # dsh profile root — an empty entry list. The tree is composed as patches:
 # each bundle in package.json's dsh.profile.bundles, then cordis.patch.yml, then any
@@ -1153,7 +1153,7 @@ So the effective host composition = bundles from `profiles/web/package.json` →
 
 ### 8.2 Agent preset selection
 
-`C:\Users\katoc\.dsh\settings.yaml:1-4`
+`C:\Users\you\.dsh\settings.yaml:1-4`
 ```yaml
 ui-onboarding:
   welcomeNoticeVersion: 2026-08-13.1
@@ -1161,7 +1161,7 @@ agent-presets:
   default: orchestrator-lean
 ```
 
-Agent presets in use: `C:\Users\katoc\.dsh\.agent-presets\orchestrator-lean\agent.cordis.yml` (24 511 bytes) and `C:\Users\katoc\.dsh\.agent-presets\chat\agent.cordis.yml` (8 284 bytes). (Also present: `.agent-presets-retired`.)
+Agent presets in use: `C:\Users\you\.dsh\.agent-presets\orchestrator-lean\agent.cordis.yml` (24 511 bytes) and `C:\Users\you\.dsh\.agent-presets\chat\agent.cordis.yml` (8 284 bytes). (Also present: `.agent-presets-retired`.)
 
 ### 8.3 Searched for hooks / bridge / jev rows — results
 
@@ -1175,7 +1175,7 @@ Agent presets in use: `C:\Users\katoc\.dsh\.agent-presets\orchestrator-lean\agen
 | whole install root + `.dsh`, `*.yml`/`*.yaml` | `hooks-claude-code\|hooks-codex\|dsh-hook` | only 2 README-comment hits; **no composition row** |
 | install root + `.dsh` | filename `hooks.json` | **no matches** |
 
-**Conclusion: nothing on this machine currently wires the hook bridge, and there is no `jev`-named plugin row in any active composition.** The word "jev" appears in `C:\Users\katoc\.dsh\AGENTS.md` (a prompt-level rule about routing to Jev) and in `.dsh/skills/jev-decision-judge/`, but **not** as a Cordis composition row.
+**Conclusion: nothing on this machine currently wires the hook bridge, and there is no `jev`-named plugin row in any active composition.** The word "jev" appears in `C:\Users\you\.dsh\AGENTS.md` (a prompt-level rule about routing to Jev) and in `.dsh/skills/jev-decision-judge/`, but **not** as a Cordis composition row.
 
 ---
 
@@ -1195,19 +1195,19 @@ Algorithm: SHA-256, computed with `Get-FileHash` on the installed files (unmodif
 | `257EB83C00A05EE068E9F4BA80CA71AB94E3A1275D24B7A0CF5038FF23DD0FD8` | 71267 | `...\node_modules\@deepseek-ai\dsh-agent-loop\lib\index.js` |
 | `55FB66CEB75EE92FDBD75E89DB813F59EDB8774CFA113968CDD132FADE65EDFE` | 500900 | `...\node_modules\@deepseek-ai\dsh-tool-cordis\lib\index.js` |
 | `C1DD78A35722E47EAEEF57B33D15D4170F4BB27DB2BEE15DA76A6D4EA9557E63` | 20501 | `...\node_modules\@deepseek-ai\dsh-tool-pwsh\lib\index.js` |
-| `5C0441EFAADE5ABC39F93CC1661C3EE57B3B49FCE0C343C7039C82E6590531B1` | 24540 | `C:\Users\katoc\.dsh\settings.yaml` |
-| `C300DCF2EBC5F02062D6591268D29D3DB6FE45E0CB138F5467276FE2BA06076E` | 223 | `C:\Users\katoc\.dsh\profiles\web\cordis.yml` |
-| `C1786F6532ABD9FCB36B779CCC9B4408ED37A1545A2F60838E1BEE2523108B84` | 12315 | `C:\Users\katoc\.dsh\profiles\web\cordis.patch.yml` |
-| `46FEDE563581F9A7CFFAC0B4A7126C46A11901BB5C1E60D004E1E6316C5DA627` | 24511 | `C:\Users\katoc\.dsh\.agent-presets\orchestrator-lean\agent.cordis.yml` |
-| `3A3E39E8E5E9817A1EFB4DAE5854D6D097024B9776EC652BB7AA883E09929319` | 8284 | `C:\Users\katoc\.dsh\.agent-presets\chat\agent.cordis.yml` |
+| `5C0441EFAADE5ABC39F93CC1661C3EE57B3B49FCE0C343C7039C82E6590531B1` | 24540 | `C:\Users\you\.dsh\settings.yaml` |
+| `C300DCF2EBC5F02062D6591268D29D3DB6FE45E0CB138F5467276FE2BA06076E` | 223 | `C:\Users\you\.dsh\profiles\web\cordis.yml` |
+| `C1786F6532ABD9FCB36B779CCC9B4408ED37A1545A2F60838E1BEE2523108B84` | 12315 | `C:\Users\you\.dsh\profiles\web\cordis.patch.yml` |
+| `46FEDE563581F9A7CFFAC0B4A7126C46A11901BB5C1E60D004E1E6316C5DA627` | 24511 | `C:\Users\you\.dsh\.agent-presets\orchestrator-lean\agent.cordis.yml` |
+| `3A3E39E8E5E9817A1EFB4DAE5854D6D097024B9776EC652BB7AA883E09929319` | 8284 | `C:\Users\you\.dsh\.agent-presets\chat\agent.cordis.yml` |
 
 Where `...\node_modules\@deepseek-ai\` expands to
-`C:\Users\katoc\AppData\Roaming\npm\node_modules\@deepseek-ai\dsh\node_modules\@deepseek-ai\`.
+`C:\Users\you\AppData\Roaming\npm\node_modules\@deepseek-ai\dsh\node_modules\@deepseek-ai\`.
 
 ### Referenced but not hashed (read only via search/inspection, not as primary evidence)
 
-- `C:\Users\katoc\AppData\Roaming\npm\node_modules\@deepseek-ai\dsh\package.json` (dependency pins, lines 51-59)
-- `C:\Users\katoc\.dsh\profiles\web\package.json` (`dsh.profile.bundles`)
+- `C:\Users\you\AppData\Roaming\npm\node_modules\@deepseek-ai\dsh\package.json` (dependency pins, lines 51-59)
+- `C:\Users\you\.dsh\profiles\web\package.json` (`dsh.profile.bundles`)
 
 ### Live Inspect calls used (read-only; no DSH process started, no network)
 
@@ -1238,7 +1238,7 @@ Where `...\node_modules\@deepseek-ai\` expands to
    later added an isolated runtime run with **no model** — it measures the mounted executor and
    the native adapter, and it still observes no assistant turn, so §4.3 is unchanged by it.
 2. **Whether the loop bounds repeated Stop steering.** `stop_hook_active` is always `false` and no counter was found in the files read; a separate bound could exist outside the files inspected (e.g. in the goal-round driver or session turn limits). Not established.
-3. **The effective per-session approval policy was not read from the session log** (session logs under `C:\Users\katoc\.dsh\sessions` were not opened). The `never` conclusion rests on the live runtime-context text matching `NEVER_SENTENCE` verbatim, not on an `approval/policy` event.
+3. **The effective per-session approval policy was not read from the session log** (session logs under `C:\Users\you\.dsh\sessions` were not opened). The `never` conclusion rests on the live runtime-context text matching `NEVER_SENTENCE` verbatim, not on an `approval/policy` event.
 4. **`profiles/headless`, `profiles/tui`, `profiles/rescue` were not inspected** — only `web` (the live one per `DSH_WEB_URL`) and the two active agent presets.
 5. **Bundle contents were not expanded.** Whether any of the 18 bundles in `dsh.profile.bundles` transitively mounts a hook row was not verified; the direct grep for hook package names across all `*.yml` under the install root and `.dsh` returned nothing.
 6. **`dsh-hooks-codex` was read only at lines 225-299** (its PreToolUse/PostToolUse/Stop branches); its Codex-dialect config schema and payload builder were not fully read.

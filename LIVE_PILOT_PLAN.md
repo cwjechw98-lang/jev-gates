@@ -35,7 +35,7 @@ six tools to a model, and that the agent can call them and get a sane answer bac
 **Where:** a dedicated home, never the active one.
 
 ```
-DSH_HOME=C:\Users\katoc\.dsh-pilot
+DSH_HOME=$HOME\.dsh-pilot
 profile:  jev-pilot
 ```
 
@@ -50,13 +50,13 @@ goes wrong, deleting one directory returns the machine to its current state.
 
 1. **Create the pilot profile from the headless default.**
    ```powershell
-   $env:DSH_HOME='C:\Users\katoc\.dsh-pilot'
+   $env:DSH_HOME='$HOME\.dsh-pilot'
    node <dsh>\lib\bin.js --profile jev-pilot --from-default-profile headless --dump-config
    ```
 
 2. **Install the kit into the pilot home.**
    ```powershell
-   node C:\Users\katoc\jev-gates\scripts\jev-install.mjs --home C:\Users\katoc\.dsh-pilot --profile jev-pilot
+   node $HOME\jev-gates\scripts\jev-install.mjs --home $HOME\.dsh-pilot --profile jev-pilot
    ```
    The installer refuses `~/.dsh` without `--allow-active-home`, so this command
    cannot reach the live home. Because `DSH_HOME` is already exported in this
@@ -73,7 +73,7 @@ goes wrong, deleting one directory returns the machine to its current state.
 4. **Confirm the tools reach a model's catalog.**
    Boot a session and read the catalog **in agent scope**:
    ```powershell
-   $env:JEV_CATALOG_OUT='C:\Users\katoc\.dsh-pilot\catalog.json'
+   $env:JEV_CATALOG_OUT='$HOME\.dsh-pilot\catalog.json'
    node <dsh>\lib\bin.js --profile jev-pilot --patch <pilot>\overlay.yml probe
    ```
    A bare `probe` boot creates no agent, and tool definitions are visible per
@@ -123,8 +123,8 @@ goes wrong, deleting one directory returns the machine to its current state.
 ### Rollback
 
 ```powershell
-node C:\Users\katoc\jev-gates\scripts\jev-install.mjs --home C:\Users\katoc\.dsh-pilot --uninstall
-Remove-Item C:\Users\katoc\.dsh-pilot -Recurse -Force
+node $HOME\jev-gates\scripts\jev-install.mjs --home $HOME\.dsh-pilot --uninstall
+Remove-Item $HOME\.dsh-pilot -Recurse -Force
 ```
 
 The uninstaller removes only files whose digest still matches what it wrote, and it

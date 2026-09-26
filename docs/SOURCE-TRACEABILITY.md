@@ -7,9 +7,9 @@ Read against the installed build: **DSH `0.1.5-rc.2`**, Node `v24.14.0`, Windows
 
 | | |
 |---|---|
-| Install root | `C:\Users\katoc\AppData\Roaming\npm\node_modules\@deepseek-ai\dsh` |
-| Packages | `C:\Users\katoc\AppData\Roaming\npm\node_modules\@deepseek-ai\dsh\node_modules\@deepseek-ai\` |
-| Repository | `C:\Users\katoc\jev-gates` |
+| Install root | `<DSH install root>` |
+| Packages | `<DSH install root>\node_modules\@deepseek-ai\` |
+| Repository | `<repo root>` |
 
 Below, `dsh-tools/lib/index.js:2773` means
 `<Packages>\dsh-tools\lib\index.js` line 2773. Line numbers are from the installed build

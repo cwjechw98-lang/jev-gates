@@ -88,7 +88,7 @@ These are not gaps to close; they are limits we chose to state rather than paper
   install set passed the real `$DSH_HOME` as `--home` while overriding `DSH_HOME` in the
   child's environment. The installer compares those two to decide whether it is looking
   at the active home, so the mismatch defeated the guard and the install landed in
-  `C:\Users\katoc\.dsh`. It created eight skill files, one profile directory and a
+  `<DSH_HOME>`. It created eight skill files, one profile directory and a
   manifest; nothing was overwritten (every backup field was `null`). It was reverted
   with the installer's own `--uninstall`, which removed exactly what it had written,
   and the skill catalog returned to its prior state. The active `web` profile was never
@@ -106,7 +106,7 @@ These are not gaps to close; they are limits we chose to state rather than paper
   control, which isolated the message from the loop: the same `decideStop`, the same claim and
   the same gate with a well-formed message ran the extra step, suppressed the repeat and kept
   the claim pending. Fixed; S2 and S4 now pass through the real adapter.
-- **2026-09-22 — a throwaway probe wrote to `C:\Users\katoc`.** A `$home`/`$HOME` collision in
+- **2026-09-22 — a throwaway probe wrote to `<user home>`.** A `$home`/`$HOME` collision in
   a temporary probe made DSH resolve its home to the user directory rather than `.dsh`, creating
   `profiles`, `sessions` and `storages` there. They were removed and the active profile was
   verified byte-identical before and after a full run. The acceptance's scratch root is always

@@ -4,7 +4,7 @@ Living document. Updated at the end of every stage. Written so the work can be r
 after a context compaction: each stage records what is done, what was verified, and where
 the next step starts.
 
-Spec: `C:\Users\katoc\Documents\Codex\2026-09-22\x20\outputs\JEV_DSH_TECHNICAL_SPEC.md` (v1.0).
+Spec: `JEV_DSH_TECHNICAL_SPEC.md` (v1.0).
 Prompt: `IMPLEMENTATION_PROMPT.md`. Corrections: `RESEARCH_REVIEW.md` (overrides both
 research documents).
 
@@ -23,16 +23,16 @@ check.
 
 | Item | Value |
 |---|---|
-| Working checkout | `C:\Users\katoc\jev-gates` |
+| Working checkout | `<repo root>` |
 | Commit at start | `ad5851e` — **matches the spec snapshot exactly** |
 | Working tree | clean at start; no uncommitted user changes needed preserving |
 | Branch / remote | `main` / `origin https://github.com/cwjechw98-lang/jev-gates.git` |
 | Node | v24.14.0 (project declares `>=18`) |
-| DSH installed | `0.1.5-rc.2` at `C:\Users\katoc\AppData\Roaming\npm\node_modules\@deepseek-ai\dsh` — matches the researched version |
-| DSH_HOME | `C:\Users\katoc\.dsh` |
+| DSH installed | `0.1.5-rc.2` at `<DSH install root>` — matches the researched version |
+| DSH_HOME | `<DSH_HOME>` |
 | Active profile | `web`; `profiles/web/cordis.yml` is `[]` |
 | Active preset | `orchestrator-lean` |
-| Active AGENTS.md | `C:\Users\katoc\.dsh\AGENTS.md` — read; carries the three-gate rule |
+| Active AGENTS.md | `<DSH_HOME>\AGENTS.md` — read; carries the three-gate rule |
 | Spec applicability | **applicable as written**: commit and DSH version both match |
 
 ### Authorisation boundaries in force for this session
@@ -480,7 +480,7 @@ so artifact criteria stop returning `no_observation`), `adapters/dsh/doctor.mjs`
 bridge and the native adapter are now separate capability rows).
 
 Untouched by design: `scripts/jev-gateway.mjs`, `scripts/jev-evals.mjs`,
-`fixtures/claim-support.json`, and everything under `C:\Users\katoc\.dsh`.
+`fixtures/claim-support.json`, and everything under `<DSH_HOME>`.
 
 ---
 
@@ -553,7 +553,7 @@ across awaits. Both findings are recorded in memory and in `docs/SOURCE-TRACEABI
 The first version of the install set passed the real `$DSH_HOME` as `--home` while overriding
 `DSH_HOME` in the child environment. The installer compares those two to decide whether it is
 looking at the active home, so the mismatch defeated the guard and the install landed in
-`C:\Users\katoc\.dsh`.
+`<DSH_HOME>`.
 
 - What it wrote: eight skill files, `profiles/jev-product/cordis.patch.yml`, and
   `jev-install-manifest.json`.

@@ -5,7 +5,7 @@
   "generatedAt": "2026-09-22T14:21:24.223Z",
   "durationMs": 43089,
   "harness": {
-    "entry": "C:\\Users\\katoc\\AppData\\Roaming\\npm\\node_modules\\@deepseek-ai\\dsh\\lib\\bin.js",
+    "entry": "C:\\Users\\you\\AppData\\Roaming\\npm\\node_modules\\@deepseek-ai\\dsh\\lib\\bin.js",
     "version": "0.1.5-rc.2",
     "node": "v24.14.0",
     "platform": "win32"
@@ -86,12 +86,12 @@
         {
           "name": "install:refuses-live-home",
           "ok": true,
-          "detail": "refusing to install into the live DSH home (C:\\Users\\katoc\\AppData\\Local\\Temp\\jev-install-6nMnrR\\fake-live) without --allow-active-home"
+          "detail": "refusing to install into the live DSH home (C:\\Users\\you\\AppData\\Local\\Temp\\jev-install-6nMnrR\\fake-live) without --allow-active-home"
         },
         {
           "name": "install:allows-a-dedicated-home",
           "ok": true,
-          "detail": "C:\\Users\\katoc\\AppData\\Local\\Temp\\jev-install-6nMnrR\\dedicated is the DSH_HOME of this shell; install only if this is the dedicated pilot home"
+          "detail": "C:\\Users\\you\\AppData\\Local\\Temp\\jev-install-6nMnrR\\dedicated is the DSH_HOME of this shell; install only if this is the dedicated pilot home"
         },
         {
           "name": "install:writes-skills-and-patch",
@@ -111,12 +111,12 @@
         {
           "name": "install:refuses-uninstall-without-manifest",
           "ok": true,
-          "detail": "no jev-install-manifest.json in C:\\Users\\katoc\\AppData\\Local\\Temp\\jev-none-2FNOxh; this installer did not install here, so it will not remove anything"
+          "detail": "no jev-install-manifest.json in C:\\Users\\you\\AppData\\Local\\Temp\\jev-none-2FNOxh; this installer did not install here, so it will not remove anything"
         },
         {
           "name": "install:active-home-untouched",
           "ok": true,
-          "detail": "the real DSH home (C:\\Users\\katoc\\.dsh) is unchanged"
+          "detail": "the real DSH home (C:\\Users\\you\\.dsh) is unchanged"
         }
       ]
     },

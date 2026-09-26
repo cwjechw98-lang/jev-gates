@@ -1,6 +1,6 @@
 # DSH 0.1.5-rc.2 — Native Cordis Plugin Interfaces (read-only investigation)
 
-Install root: `C:\Users\katoc\AppData\Roaming\npm\node_modules\@deepseek-ai\dsh`
+Install root: `<DSH install root>`
 Nested packages: `<install>\node_modules\@deepseek-ai\`
 Version: `0.1.5-rc.2` (install `package.json`)
 Method: read-only inspection of the installed JS + `.d.ts`, plus four inline `node --input-type=module -e` reproductions against the installed `@deepseek-ai/cordis`. No files outside this document were written; no DSH server was started.
@@ -635,7 +635,7 @@ Computed with `Get-FileHash -Algorithm SHA256` over the installed files. **[V]**
 | `1729CDBF8EE40B17C8839E06BF96491490548559E11EF7E411271E0754E751C5` | `<install>\node_modules\@deepseek-ai\cordis\lib\index.js` |
 | `0FF7F1D72C4E0CBE14001709C81E20A04B70464118A7F78568952988E28F2AC5` | `<install>\lib\bin.js` |
 
-`<install>` = `C:\Users\katoc\AppData\Roaming\npm\node_modules\@deepseek-ai\dsh`
+`<install>` = `<DSH install root>`
 
 ---
 

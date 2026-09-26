@@ -348,7 +348,7 @@ last decisions:
   2026-09-22T11:01  fix-failing-test                 done
   2026-09-22T11:01  fix-failing-test                 unverified
 
-journal: C:\Users\katoc\jev-gates\scripts\jev-decisions.jsonl
+journal: C:\Users\you\jev-gates\scripts\jev-decisions.jsonl
 ```
 
 ```
@@ -542,15 +542,15 @@ nothing.
 $ node adapters/dsh/doctor.mjs
 jev-gates × DeepSeek Harness — doctor
 
-DSH install:  C:\Users\katoc\AppData\Roaming\npm\node_modules\@deepseek-ai\dsh
+DSH install:  C:\Users\you\AppData\Roaming\npm\node_modules\@deepseek-ai\dsh
 DSH version:  0.1.5-rc.2
-DSH home:     C:\Users\katoc\.dsh
+DSH home:     C:\Users\you\.dsh
 profile:      web
 policy:       unknown (no approval policy key in settings.yaml)
 bridge:       installed but NOT mounted
-  checked: C:\Users\katoc\.dsh\settings.yaml
-  checked: C:\Users\katoc\.dsh\profiles\web\cordis.yml
-  checked: C:\Users\katoc\.dsh\profiles\web\cordis.patch.yml
+  checked: C:\Users\you\.dsh\settings.yaml
+  checked: C:\Users\you\.dsh\profiles\web\cordis.yml
+  checked: C:\Users\you\.dsh\profiles\web\cordis.patch.yml
 
 capabilities:
   [verified    ] PreToolUse deny
@@ -576,7 +576,7 @@ capabilities:
                  evidence: no composition row found
   [verified    ] install present
                  the citations above are readable on this machine
-                 evidence: C:\Users\katoc\AppData\Roaming\npm\node_modules\@deepseek-ai\dsh
+                 evidence: C:\Users\you\AppData\Roaming\npm\node_modules\@deepseek-ai\dsh
 
 status: degraded (exit 1)
 enforcement: advisory / completion advisory
@@ -617,17 +617,17 @@ including an unrecognised command.
 $ node adapters/dsh/install.mjs plan
 DRY RUN — nothing was written
 
-target:      C:\Users\katoc\.dsh\profiles\web\cordis.patch.yml
+target:      C:\Users\you\.dsh\profiles\web\cordis.patch.yml
 action:      appended
-hooks file:  C:\Users\katoc\jev-gates\.dsh-state\hooks.json
-bridge:      C:\Users\katoc\jev-gates\adapters\dsh\bridge.mjs
+hooks file:  C:\Users\you\jev-gates\.dsh-state\hooks.json
+bridge:      C:\Users\you\jev-gates\adapters\dsh\bridge.mjs
 mode:        shadow   policy: unknown   max steers: 2
 
 block to insert:
 # >>> jev-gates dsh adapter >>>
 - name: '@deepseek-ai/dsh-hooks-claude-code'
   config:
-    configPath: C:\Users\katoc\jev-gates\.dsh-state\hooks.json
+    configPath: C:\Users\you\jev-gates\.dsh-state\hooks.json
     pluginRoot: jev-gates
     projectDir: .
 # <<< jev-gates dsh adapter <<<
