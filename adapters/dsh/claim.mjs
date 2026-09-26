@@ -11,9 +11,9 @@
  * session id. It records what is being claimed and, optionally, the request the
  * gate should judge when the turn ends.
  *
- *   node scripts/jev-dsh-claim.mjs set "the tests pass" --session <id> [--request req.json]
- *   node scripts/jev-dsh-claim.mjs show --session <id>
- *   node scripts/jev-dsh-claim.mjs clear --session <id>
+ *   node adapters/dsh/claim.mjs set "the tests pass" --session <id> [--request req.json]
+ *   node adapters/dsh/claim.mjs show --session <id>
+ *   node adapters/dsh/claim.mjs clear --session <id>
  *
  * Exit codes: 0 written or cleared, 3 nothing to show, 2 usage error.
  */

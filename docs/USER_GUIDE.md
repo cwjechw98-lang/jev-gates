@@ -35,7 +35,18 @@ $env:DSH_HOME = "$HOME\.dsh-pilot"
 Why: your working profile stays exactly as it is. If anything goes wrong, deleting one
 directory returns the machine to its current state — there is nothing to repair.
 
-## Step 2. See what would happen (no writes)
+## Step 2. Create the profile — this must happen BEFORE the install
+
+```powershell
+node "$env:APPDATA\npm\node_modules\@deepseek-ai\dsh\lib\bin.js" --profile jev-pilot --from-default-profile headless --dump-config
+```
+
+**The order is not a formality.** `--from-default-profile` regenerates
+`cordis.patch.yml`. Install the kit first and create the profile second, and the kit's rows
+are overwritten by an empty patch — silently, with no error at all. So the profile comes
+first.
+
+## Step 3. See what would happen (no writes)
 
 ```powershell
 node scripts/jev-install.mjs --home $env:DSH_HOME --profile jev-pilot --dry-run
@@ -51,7 +62,7 @@ manifest: C:\Users\you\.dsh-pilot\jev-install-manifest.json
 
 Nothing is written at this step. It is a check.
 
-## Step 3. Install
+## Step 4. Install
 
 ```powershell
 node scripts/jev-install.mjs --home $env:DSH_HOME --profile jev-pilot
@@ -63,10 +74,12 @@ Same output, without the `dry run` marker. Nine files are written:
 * `skills/<name>/SKILL.md` — eight skills;
 * `jev-install-manifest.json` — the record of what was written, which the rollback uses.
 
-If a file already existed, the installer **writes a backup first** and reports it in the
-`backed up` count.
+If a file already existed, the installer **writes a backup first** — a sibling file with the
+same name and a timestamp, such as `cordis.patch.yml.2026-09-26T12-00-00.bak`. A new file
+gets no backup, because there is nothing to copy. An existing `SKILL.md` that is not ours
+is skipped, never overwritten, so your own skills survive.
 
-## Step 4. Verify
+## Step 5. Verify
 
 ```powershell
 node adapters/dsh/doctor.mjs
@@ -77,7 +90,7 @@ importantly — what is actually mounted. Read the `capabilities` section: each 
 carries `verified`, `conditional` or `unavailable`, together with the evidence for that
 label. `verified` means the path was actually exercised, not merely described.
 
-## Step 5. Roll back
+## Step 6. Roll back
 
 ```powershell
 node scripts/jev-install.mjs --home $env:DSH_HOME --profile jev-pilot --uninstall
@@ -137,6 +150,11 @@ the shipped sandboxed executors that path **cannot launch a single hook, and not
 reports that** — the check silently does nothing. The doctor marks that capability
 `conditional` and says plainly: use the native adapter, which needs no `shell` service.
 That is why `scripts/jev-install.mjs` is the supported path.
+
+**That second installer has no `--home`, and it does not protect your working home.** Even
+its dry run aims straight at the live `profiles/web/cordis.patch.yml`. Isolation for it can
+only be set through the `$env:DSH_HOME` and `$env:DSH_PROFILE` environment variables. If you
+ever try it, set those first.
 
 **Activating it on your working profile is a separate decision.** Installing into the
 home you are running right now requires an explicit flag:
