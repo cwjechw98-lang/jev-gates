@@ -132,7 +132,7 @@ export function buildPatch(repo) {
     lines.push(`    - id: ${row.id}`);
     lines.push(`      name: '${url}'`);
     lines.push('      config:');
-    lines.push('        mode: advisory');
+    lines.push(`        mode: ${row.id === 'jev-adapter' ? 'shadow' : 'advisory'}`);
   }
   return `${lines.join('\n')}\n`;
 }
